@@ -1,0 +1,47 @@
+# Flutter
+.dart_tool/
+.packages
+build/
+*.iml
+pubspec.lock
+pubspec_overrides.yaml
+
+# IntelliJ
+.idea/
+
+# macOS
+.DS_Store
+
+# Android
+*.jks
+*.keystore
+**/android/key.properties
+**/android/local.properties
+**/android/gradle
+
+# iOS
+**/ios/Flutter/AppFrameworkInfo.plist
+**/ios/Flutter/Debug.xcconfig
+**/ios/Flutter/Release.xcconfig
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+
+# Firebase
+**/android/google-services.json
+**/ios/Runner/GoogleService-Info.plist
+
+# Environment
+.env
+*.env
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# Firebase Functions (nested git repo)
+functions/

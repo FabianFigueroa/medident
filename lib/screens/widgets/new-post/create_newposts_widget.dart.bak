@@ -1,0 +1,949 @@
+﻿import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
+class PostType {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final String collection;
+
+  const PostType._(this.icon, this.label, this.color, this.collection);
+
+  static const penser = PostType._(Icons.edit_note, 'Pensar', Color(0xFF1DA1F2), 'posts');
+  static const photo = PostType._(Icons.camera_alt_rounded, 'Foto', Color(0xFFE11B48), 'posts');
+  static const promo = PostType._(Icons.card_giftcard_rounded, 'Promo', Color(0xFF9333EA), 'promotions');
+  static const event = PostType._(Icons.event_rounded, 'Evento', Color(0xFFF59E0B), 'events');
+  static const poll = PostType._(Icons.poll_rounded, 'Encuesta', Color(0xFF10B981), 'polls');
+  static const video = PostType._(Icons.videocam_rounded, 'Video', Color(0xFFFF6B6B), 'reels');
+  static const link = PostType._(Icons.link_rounded, 'Enlace', Color(0xFF6366F1), 'posts');
+  static const apoyo = PostType._(Icons.group_add_rounded, 'Apoyo', Color(0xFF06B6D4), 'apoyos');
+  static const grupo = PostType._(Icons.groups_rounded, 'Grupo', Color(0xFFF97316), 'grupos');
+  static const streaming = PostType._(Icons.live_tv_rounded, 'Streaming', Color(0xFFEF4444), 'streaming');
+
+  static const List<PostType> values = [penser, photo, promo, event, poll, video, link, apoyo, grupo, streaming];
+}
+
+class Create_Newposts_Widget extends StatelessWidget {
+  final String? userId;
+  final String? userName;
+  final String? userPhoto;
+  final String? clinicId;
+  final VoidCallback? onPublished;
+  final String promoScope;
+
+  const Create_Newposts_Widget({
+    super.key,
+    this.userId,
+    this.userName,
+    this.userPhoto,
+    this.clinicId,
+    this.onPublished,
+    this.promoScope = 'profile',
+  });
+
+  String get _userId => userId?.isNotEmpty == true ? userId! : 'user_dentist_1';
+  String get _userName => userName ?? 'Usuario Demo';
+  String get _userPhoto =>
+      userPhoto != null && userPhoto!.isNotEmpty ? userPhoto! : '';
+
+  static Future<void> show(BuildContext context, {
+    String? userId,
+    String? userName,
+    String? userPhoto,
+    String? clinicId,
+    VoidCallback? onPublished,
+    String promoScope = 'profile',
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CreatePostModal(
+        userId: userId,
+        userName: userName,
+        userPhoto: userPhoto,
+        clinicId: clinicId,
+        onPublished: onPublished,
+        promoScope: promoScope,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => show(context,
+          userId: _userId,
+          userName: _userName,
+          userPhoto: _userPhoto,
+          clinicId: clinicId,
+          onPublished: onPublished,
+          promoScope: promoScope,
+        ),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 1.0, end: 1.0),
+          duration: const Duration(milliseconds: 150),
+          builder: (context, scale, child) => Transform.scale(
+            scale: scale,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundImage: _userPhoto.isNotEmpty ? NetworkImage(_userPhoto) : null,
+                    onBackgroundImageError: _userPhoto.isNotEmpty ? (_, __) {} : null,
+                    child: _userName.isNotEmpty
+                        ? Text(_userName[0].toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.bold))
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '¿Qué quieres compartir?',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)]),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── MODAL FORM ──────────────────────────────────────────
+
+class _CreatePostModal extends StatefulWidget {
+  final String? userId;
+  final String? userName;
+  final String? userPhoto;
+  final String? clinicId;
+  final VoidCallback? onPublished;
+  final String promoScope;
+
+  const _CreatePostModal({
+    this.userId,
+    this.userName,
+    this.userPhoto,
+    this.clinicId,
+    this.onPublished,
+    this.promoScope = 'profile',
+  });
+
+  @override
+  State<_CreatePostModal> createState() => _CreatePostModalState();
+}
+
+class _CreatePostModalState extends State<_CreatePostModal> {
+  final _textCtrl = TextEditingController();
+  final _promoTitleCtrl = TextEditingController();
+  final _promoPriceCtrl = TextEditingController();
+  final _promoDiscountCtrl = TextEditingController();
+  final _promoCategoryCtrl = TextEditingController();
+  final _promoTermsCtrl = TextEditingController();
+  final _pollOptCtrl = TextEditingController();
+  final _linkCtrl = TextEditingController();
+  final _picker = ImagePicker();
+  final _firestore = FirebaseFirestore.instance;
+  final _textFocus = FocusNode();
+
+  PostType _selectedType = PostType.penser;
+  var _isPosting = false;
+  DateTime? _promoValidUntil;
+
+  List<Uint8List> _imageBytes = [];
+  List<String> _tempPaths = [];
+  List<String> _pollOptions = [];
+  List<String> _uploadedImageUrls = [];
+  List<String> _uploadedStoragePaths = [];
+  var _isUploading = false;
+
+  String get _userId =>
+      widget.userId?.isNotEmpty == true ? widget.userId! : 'user_dentist_1';
+  String get _userName => widget.userName ?? 'Usuario Demo';
+  String get _userPhoto =>
+      widget.userPhoto != null && widget.userPhoto!.isNotEmpty ? widget.userPhoto! : '';
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    _promoTitleCtrl.dispose();
+    _promoPriceCtrl.dispose();
+    _promoDiscountCtrl.dispose();
+    _promoCategoryCtrl.dispose();
+    _promoTermsCtrl.dispose();
+    _pollOptCtrl.dispose();
+    _linkCtrl.dispose();
+    _textFocus.dispose();
+    super.dispose();
+  }
+
+  void _onTypeChanged(PostType type) {
+    setState(() => _selectedType = type);
+    _textFocus.requestFocus();
+  }
+
+  Future<void> _pickFromCamera() async {
+    try {
+      final XFile? img = await _picker.pickImage(
+        source: ImageSource.camera, maxWidth: 1200, maxHeight: 1200, imageQuality: 80,
+      );
+      if (img != null) _addImage(img);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cámara no disponible, abriendo galería...'), duration: const Duration(seconds: 1)),
+        );
+      }
+      await _pickFromGallery();
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final imgs = await _picker.pickMultiImage(maxWidth: 1200, maxHeight: 1200, imageQuality: 80);
+      for (final img in imgs.take(5)) _addImage(img);
+    } catch (e) {
+      _showError('Error galería: $e');
+    }
+  }
+
+  Future<void> _addImage(XFile file) async {
+    if (_imageBytes.length >= 5) return;
+    try {
+      final bytes = await file.readAsBytes();
+      setState(() { _imageBytes.add(bytes); _tempPaths.add(file.path); });
+    } catch (e) {
+      _showError('Error: $e');
+    }
+  }
+
+  Future<List<String>> _uploadImages() async {
+    final urls = <String>[];
+    final paths = <String>[];
+    final storage = FirebaseStorage.instance;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final isClinic = widget.clinicId != null && widget.clinicId!.isNotEmpty;
+    for (var i = 0; i < _imageBytes.length; i++) {
+      final destination = isClinic
+          ? 'promotions/clinics/${widget.clinicId}/$timestamp${i}_$i.jpg'
+          : 'promotions/users/$_userId/${timestamp}_$i.jpg';
+      final ref = storage.ref(destination);
+      await ref.putData(_imageBytes[i], SettableMetadata(contentType: 'image/jpeg'));
+      urls.add(await ref.getDownloadURL());
+      paths.add(destination);
+    }
+    _uploadedStoragePaths = paths;
+    return urls;
+  }
+
+  void _removeImage(int i) {
+    setState(() { _imageBytes.removeAt(i); _tempPaths.removeAt(i); });
+  }
+
+  void _addPollOption() {
+    final t = _pollOptCtrl.text.trim();
+    if (t.isNotEmpty && _pollOptions.length < 6) {
+      setState(() => _pollOptions.add(t));
+      _pollOptCtrl.clear();
+    }
+  }
+
+  Future<void> _publish() async {
+    if (!_hasContent()) { _showError('Completa los campos necesarios'); return; }
+    setState(() => _isPosting = true);
+    try {
+      if (_imageBytes.isNotEmpty) {
+        setState(() => _isUploading = true);
+        _uploadedImageUrls = await _uploadImages();
+        setState(() => _isUploading = false);
+      }
+      final data = _buildData();
+      await _firestore.collection(_selectedType.collection).add(data);
+      _resetForm();
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('¡Publicado!'), backgroundColor: Color(0xFF0EA5A4)),
+        );
+      }
+      widget.onPublished?.call();
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      if (mounted) setState(() { _isPosting = false; _isUploading = false; });
+    }
+  }
+
+  bool _hasContent() {
+    if (_selectedType == PostType.penser) return _textCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.photo) return _imageBytes.isNotEmpty || _textCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.promo) return _promoTitleCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.event) return _textCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.poll) return _pollOptions.isNotEmpty;
+    if (_selectedType == PostType.video) return _textCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.link) return _linkCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.apoyo) return _promoTitleCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.grupo) return _promoTitleCtrl.text.trim().isNotEmpty;
+    if (_selectedType == PostType.streaming) return _promoTitleCtrl.text.trim().isNotEmpty;
+    return false;
+  }
+
+  Map<String, dynamic> _buildData() {
+    final base = <String, dynamic>{
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+    final isClinic = widget.clinicId != null && widget.clinicId!.isNotEmpty;
+    if (isClinic) {
+      base['clinicId'] = widget.clinicId;
+    }
+    switch (_selectedType) {
+      case PostType.penser:
+        return {...base, 'type': 'penser', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0, 'sharesCount': 0, 'likedBy': <String>[], 'city': ''};
+      case PostType.photo:
+        return {...base, 'type': 'photo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'likedBy': <String>[]};
+      case PostType.promo:
+        final price = double.tryParse(_promoPriceCtrl.text.trim()) ?? 0;
+        final discountStr = _promoDiscountCtrl.text.trim();
+        final discountPrice = discountStr.isNotEmpty
+            ? price - (price * (double.tryParse(discountStr) ?? 0) / 100)
+            : null;
+        final category = _promoCategoryCtrl.text.trim();
+        return {
+          ...base,
+          'type': 'promo',
+          'name': _promoTitleCtrl.text.trim(),
+          'description': _textCtrl.text.trim(),
+          'price': price,
+          'discountPrice': discountPrice,
+          'imageUrls': _uploadedImageUrls,
+          'storagePaths': _uploadedStoragePaths,
+          'category': category.isNotEmpty ? category : null,
+          'createdBy': _userId,
+          'userName': _userName,
+          'userPhoto': _userPhoto,
+          'clinicName': null,
+          'source': isClinic ? 'clinic' : 'user',
+          'terms': _promoTermsCtrl.text.trim().isNotEmpty ? _promoTermsCtrl.text.trim() : null,
+          'isFeatured': false,
+          'isAvailable': true,
+          'isActive': true,
+          'scope': widget.promoScope,
+          'rating': null,
+          'reviewsCount': 0,
+          'expiresAt': _promoValidUntil != null ? Timestamp.fromDate(_promoValidUntil!) : null,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+      case PostType.event:
+        return {...base, 'type': 'event', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0, 'eventDate': null, 'eventLocation': null};
+      case PostType.poll:
+        return {...base, 'type': 'poll', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'question': _textCtrl.text.trim(), 'options': _pollOptions.map((o) => {'text': o, 'votes': 0}).toList(), 'votesCount': 0};
+      case PostType.video:
+        return {...base, 'type': 'video', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
+      case PostType.link:
+        return {...base, 'type': 'link', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'url': _linkCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
+      case PostType.apoyo:
+        return {...base, 'type': 'apoyo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _promoTitleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'contact': _linkCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'membersCount': 0};
+      case PostType.grupo:
+        return {...base, 'type': 'grupo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _promoTitleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'membersCount': 0};
+      case PostType.streaming:
+        return {...base, 'type': 'streaming', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _promoTitleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'streamUrl': _linkCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'isLive': false};
+    }
+    return base;
+  }
+
+  void _resetForm() {
+    _textCtrl.clear();
+    _promoTitleCtrl.clear();
+    _promoPriceCtrl.clear();
+    _pollOptCtrl.clear();
+    _linkCtrl.clear();
+    setState(() { _imageBytes.clear(); _tempPaths.clear(); _pollOptions.clear(); _uploadedImageUrls.clear(); _uploadedStoragePaths.clear(); });
+  }
+
+  void _showError(String msg) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red.shade600));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: _selectedType.color.withOpacity(0.12),
+                  backgroundImage: _userPhoto.isNotEmpty ? NetworkImage(_userPhoto) : null,
+                  onBackgroundImageError: _userPhoto.isNotEmpty ? (_, __) {} : null,
+                  child: _userName.isNotEmpty && _userPhoto.isEmpty
+                      ? Text(_userName[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _selectedType.color))
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_userName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text('Publicar ${_selectedType.label}', style: TextStyle(fontSize: 12, color: _selectedType.color.withOpacity(0.7))),
+                    ],
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.grey[100]),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTypeSelector(),
+                  const SizedBox(height: 24),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.04, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey(_selectedType),
+                      child: _buildBody(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildPublishButton(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypeSelector() {
+    return SizedBox(
+      height: 110,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: PostType.values.map((type) {
+            final active = _selectedType == type;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => _onTypeChanged(type),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutBack,
+                  width: active ? 90 : 72,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: active ? type.color : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: active ? type.color : Colors.grey[200]!,
+                      width: active ? 0 : 1,
+                    ),
+                    boxShadow: active
+                        ? [BoxShadow(color: type.color.withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4))]
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedScale(
+                        scale: active ? 1.15 : 1.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: Icon(type.icon, size: 24, color: active ? Colors.white : Colors.grey[500]),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(type.label, style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: active ? Colors.white : Colors.grey[600],
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_selectedType) {
+      case PostType.penser: return _buildTextField('¿Qué estás pensando?', Icons.edit_note, const Color(0xFF1DA1F2));
+      case PostType.photo: return _buildPhotoBody();
+      case PostType.promo: return _buildPromoBody();
+      case PostType.event: return _buildTextField('Describe tu evento...', Icons.event_rounded, const Color(0xFFF59E0B));
+      case PostType.poll: return _buildPollBody();
+      case PostType.video: return _buildTextField('Descripción del video...', Icons.videocam_rounded, const Color(0xFFFF6B6B));
+      case PostType.link: return _buildLinkBody();
+      case PostType.apoyo: return _buildApoyoBody();
+      case PostType.grupo: return _buildGrupoBody();
+      case PostType.streaming: return _buildStreamingBody();
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildTextField(String hint, IconData icon, Color color) {
+    return TextField(
+      controller: _textCtrl,
+      focusNode: _textFocus,
+      maxLines: 5,
+      minLines: 3,
+      style: const TextStyle(fontSize: 15, height: 1.4),
+      decoration: _inputDecoration(hint, icon, color),
+    );
+  }
+
+  Widget _buildPhotoBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_imageBytes.isNotEmpty) ...[
+          const Text('Vista previa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _imageBytes.length,
+              itemBuilder: (_, i) => _ImageThumbnail(bytes: _imageBytes[i], onRemove: () => _removeImage(i)),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _buildTextField('Añade un texto...', Icons.camera_alt_rounded, const Color(0xFFE11B48)),
+        const SizedBox(height: 12),
+        Row(children: [
+          _MediaButton(icon: Icons.camera_alt, label: 'Cámara', color: const Color(0xFFE11B48), onTap: _pickFromCamera),
+          const SizedBox(width: 12),
+          _MediaButton(icon: Icons.photo_library, label: 'Galería', color: const Color(0xFF8B5CF6), onTap: _pickFromGallery),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildPromoBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: [const Color(0xFF9333EA).withOpacity(0.05), Colors.white]),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF9333EA).withOpacity(0.15)),
+          ),
+          child: Column(
+            children: [
+              TextField(controller: _promoTitleCtrl, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), decoration: _inputDecoration('Nombre de la promoción', Icons.card_giftcard_rounded, const Color(0xFF9333EA))),
+              const SizedBox(height: 12),
+              TextField(controller: _textCtrl, maxLines: 2, minLines: 1, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Descripción...', Icons.description_outlined, const Color(0xFF9333EA))),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: _promoPriceCtrl, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), decoration: _inputDecoration('Precio \$', Icons.attach_money, const Color(0xFF9333EA)))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: _promoDiscountCtrl, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 16), decoration: _inputDecoration('Descuento %', Icons.discount_outlined, const Color(0xFF9333EA)))),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: _promoCategoryCtrl, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Categoría (ej: Limpieza)', Icons.category_outlined, const Color(0xFF9333EA)))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _promoValidUntil ?? DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) setState(() => _promoValidUntil = date);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.event, size: 18, color: const Color(0xFF9333EA).withOpacity(0.6)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _promoValidUntil != null
+                                ? '${_promoValidUntil!.day}/${_promoValidUntil!.month}/${_promoValidUntil!.year}'
+                                : 'Válido hasta',
+                            style: TextStyle(color: _promoValidUntil != null ? Colors.black87 : Colors.grey[400], fontSize: 14),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(controller: _promoTermsCtrl, maxLines: 2, minLines: 1, style: const TextStyle(fontSize: 14), decoration: _inputDecoration('Términos y condiciones (opcional)', Icons.description_outlined, const Color(0xFF9333EA))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          _MediaButton(icon: Icons.camera_alt, label: 'Foto', color: const Color(0xFF9333EA), onTap: _pickFromCamera),
+          const SizedBox(width: 12),
+          _MediaButton(icon: Icons.photo_library, label: 'Galería', color: const Color(0xFF6366F1), onTap: _pickFromGallery),
+        ]),
+        if (_imageBytes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text('Vista previa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _imageBytes.length,
+              itemBuilder: (_, i) => _ImageThumbnail(bytes: _imageBytes[i], onRemove: () => _removeImage(i)),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPollBody() {
+    return Column(
+      children: [
+        TextField(controller: _textCtrl, focusNode: _textFocus, maxLines: 2, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Tu pregunta...', Icons.poll_rounded, const Color(0xFF10B981))),
+        const SizedBox(height: 10),
+        ..._pollOptions.asMap().entries.map((e) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: _PollOptionChip(index: e.key, text: e.value, onRemove: () => setState(() => _pollOptions.removeAt(e.key))),
+        )),
+        if (_pollOptions.length < 6)
+          Row(children: [
+            Expanded(
+              child: SizedBox(
+                height: 40,
+                child: TextField(
+                  controller: _pollOptCtrl,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Opción ${_pollOptions.length + 1}',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  onSubmitted: (_) => _addPollOption(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              icon: const Icon(Icons.add, size: 18),
+              style: IconButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white, minimumSize: const Size(40, 40)),
+              onPressed: _addPollOption,
+            ),
+          ]),
+      ],
+    );
+  }
+
+  Widget _buildLinkBody() {
+    return Column(
+      children: [
+        TextField(controller: _linkCtrl, focusNode: _textFocus, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('URL del enlace...', Icons.link_rounded, const Color(0xFF6366F1))),
+        const SizedBox(height: 8),
+        TextField(controller: _textCtrl, maxLines: 3, minLines: 1, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Descripción (opcional)...', Icons.description_outlined, const Color(0xFF6366F1))),
+      ],
+    );
+  }
+
+  Widget _buildApoyoBody() {
+    final color = const Color(0xFF06B6D4);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(gradient: LinearGradient(colors: [color.withOpacity(0.05), Colors.white]), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.15))),
+        child: Column(children: [
+          TextField(controller: _promoTitleCtrl, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), decoration: _inputDecoration('Nombre del grupo de apoyo', Icons.group_add_rounded, color)),
+          const SizedBox(height: 12),
+          TextField(controller: _textCtrl, maxLines: 2, minLines: 1, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Descripción...', Icons.description_outlined, color)),
+          const SizedBox(height: 12),
+          TextField(controller: _linkCtrl, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Contacto (WhatsApp, teléfono...)', Icons.contact_phone_outlined, color)),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      Row(children: [
+        _MediaButton(icon: Icons.camera_alt, label: 'Foto', color: color, onTap: _pickFromCamera),
+        const SizedBox(width: 12),
+        _MediaButton(icon: Icons.photo_library, label: 'Galería', color: const Color(0xFF6366F1), onTap: _pickFromGallery),
+      ]),
+      if (_imageBytes.isNotEmpty) ...[
+        const SizedBox(height: 12), const Text('Vista previa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)), const SizedBox(height: 8),
+        SizedBox(height: 100, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _imageBytes.length, itemBuilder: (_, i) => _ImageThumbnail(bytes: _imageBytes[i], onRemove: () => _removeImage(i)))),
+      ],
+    ]);
+  }
+
+  Widget _buildGrupoBody() {
+    final color = const Color(0xFFF97316);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(gradient: LinearGradient(colors: [color.withOpacity(0.05), Colors.white]), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.15))),
+        child: Column(children: [
+          TextField(controller: _promoTitleCtrl, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), decoration: _inputDecoration('Nombre del grupo', Icons.groups_rounded, color)),
+          const SizedBox(height: 12),
+          TextField(controller: _textCtrl, maxLines: 2, minLines: 1, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Descripción...', Icons.description_outlined, color)),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      Row(children: [
+        _MediaButton(icon: Icons.camera_alt, label: 'Foto', color: color, onTap: _pickFromCamera),
+        const SizedBox(width: 12),
+        _MediaButton(icon: Icons.photo_library, label: 'Galería', color: const Color(0xFF6366F1), onTap: _pickFromGallery),
+      ]),
+      if (_imageBytes.isNotEmpty) ...[
+        const SizedBox(height: 12), const Text('Vista previa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)), const SizedBox(height: 8),
+        SizedBox(height: 100, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _imageBytes.length, itemBuilder: (_, i) => _ImageThumbnail(bytes: _imageBytes[i], onRemove: () => _removeImage(i)))),
+      ],
+    ]);
+  }
+
+  Widget _buildStreamingBody() {
+    final color = const Color(0xFFEF4444);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(gradient: LinearGradient(colors: [color.withOpacity(0.05), Colors.white]), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.15))),
+        child: Column(children: [
+          TextField(controller: _promoTitleCtrl, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), decoration: _inputDecoration('Título del streaming', Icons.live_tv_rounded, color)),
+          const SizedBox(height: 12),
+          TextField(controller: _textCtrl, maxLines: 2, minLines: 1, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('Descripción...', Icons.description_outlined, color)),
+          const SizedBox(height: 12),
+          TextField(controller: _linkCtrl, style: const TextStyle(fontSize: 15), decoration: _inputDecoration('URL del stream (YouTube, Facebook...)', Icons.link_rounded, color)),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      Row(children: [
+        _MediaButton(icon: Icons.camera_alt, label: 'Foto', color: color, onTap: _pickFromCamera),
+        const SizedBox(width: 12),
+        _MediaButton(icon: Icons.photo_library, label: 'Galería', color: const Color(0xFF6366F1), onTap: _pickFromGallery),
+      ]),
+      if (_imageBytes.isNotEmpty) ...[
+        const SizedBox(height: 12), const Text('Vista previa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)), const SizedBox(height: 8),
+        SizedBox(height: 100, child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: _imageBytes.length, itemBuilder: (_, i) => _ImageThumbnail(bytes: _imageBytes[i], onRemove: () => _removeImage(i)))),
+      ],
+    ]);
+  }
+
+  InputDecoration _inputDecoration(String hint, IconData icon, Color color) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+      prefixIcon: Icon(icon, size: 18, color: color.withOpacity(0.6)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: color, width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      filled: true,
+      fillColor: Colors.grey[50],
+    );
+  }
+
+  Widget _buildPublishButton() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: _selectedType.color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isPosting ? null : _publish,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _selectedType.color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          disabledBackgroundColor: Colors.grey[300],
+        ),
+        child: _isPosting || _isUploading
+            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5, strokeCap: StrokeCap.round))
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(_selectedType.icon, size: 20),
+                const SizedBox(width: 10),
+                Text('Publicar ${_selectedType.label}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ]),
+      ),
+    );
+  }
+}
+
+class _ImageThumbnail extends StatelessWidget {
+  final Uint8List bytes;
+  final VoidCallback onRemove;
+  const _ImageThumbnail({required this.bytes, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.memory(bytes, width: 72, height: 72, fit: BoxFit.cover),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white, size: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PollOptionChip extends StatelessWidget {
+  final int index;
+  final String text;
+  final VoidCallback onRemove;
+  const _PollOptionChip({required this.index, required this.text, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, size: 16, color: const Color(0xFF10B981)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          ),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 16, color: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  const _MediaButton({required this.icon, required this.label, required this.color, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 8),
+              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

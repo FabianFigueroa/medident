@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── USUARIOS ───────────────────────────────────────
+    match /users/{userId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == userId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── SEGURIDAD ──────────────────────────────────────
+    match /security/{userId} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // ── CLINICAS ───────────────────────────────────────
+    match /clinics/{clinicId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        (resource.data.ownerId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // ── REGISTROS DE ACCESO (RFID + foto) ─────────────
+    match /access_logs/{logId} {
+      allow read: if request.auth != null &&
+        (resource.data.employeeId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'dentist']);
+      allow create: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ── CITAS ──────────────────────────────────────────
+    match /appointments/{appointmentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── POSTS ─────────────────────────────────────────
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── STORIES ───────────────────────────────────────
+    match /stories/{storyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── PROMOCIONES ───────────────────────────────────
+    match /promotions/{promoId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── PRODUCTOS ─────────────────────────────────────
+    match /products/{productId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── TRATAMIENTOS ──────────────────────────────────
+    match /treatments/{treatmentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── ALERTAS ───────────────────────────────────────
+    match /alerts/{alertId} {
+      allow read, write: if request.auth != null &&
+        (resource.data.userId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

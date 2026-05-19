@@ -1,0 +1,7 @@
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+  errors:
+    unused_import: ignore
+    dead_code: ignore
+    deprecated_member_use: ignore

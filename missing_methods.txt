@@ -1,0 +1,56 @@
+﻿  // ==================== TURNOS (EMPLEADOS) ====================
+
+  Future<List<TurnoModel>> getTurnos({required String dentistId, int limit = 10}) async {
+    try {
+      final snap = await _firestore.collection('turnos')
+          .where('dentistId', isEqualTo: dentistId)
+          .orderBy('date', descending: false)
+          .limit(limit)
+          .get();
+      return snap.docs.map((d) => TurnoModel.fromJson(d.data(), d.id)).toList();
+    } catch (e) {
+      debugPrint('getTurnos: \');
+      return [];
+    }
+  }
+
+  Future<String> createTurno({
+    required String dentistId,
+    required String employeeId,
+    required String employeeName,
+    required DateTime date,
+    required String startTime,
+    required String endTime,
+    String? notes,
+  }) async {
+    final ref = _firestore.collection('turnos').doc();
+    await ref.set({
+      'dentistId': dentistId,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'date': date,
+      'startTime': startTime,
+      'endTime': endTime,
+      'status': 'scheduled',
+      'notes': notes,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  Future<void> updateTurnoStatus(String turnoId, String status) async {
+    await _firestore.collection('turnos').doc(turnoId).update({'status': status});
+  }
+
+  Future<String> createReel({required String userId, required String videoUrl, String? description}) async {
+    final ref = _firestore.collection('reels').doc();
+    await ref.set({
+      'userId': userId,
+      'videoUrl': videoUrl,
+      'description': description,
+      'likesCount': 0,
+      'commentsCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }

@@ -1,0 +1,40 @@
+{
+  "rules": {
+    "clinics": {
+      "$clinicApiKey": {
+        ".read": "auth != null && (root.child('clinics').child($clinicApiKey).child('employeeIds').val().includes(auth.uid) || root.child('clinics').child($clinicApiKey).child('ownerId').val() === auth.uid)",
+        ".write": "data.exists() && (root.child('clinics').child($clinicApiKey).child('ownerId').val() === auth.uid)",
+        "devices": {
+          "$deviceId": {
+            ".read": "auth != null",
+            ".write": "auth != null",
+            "config": {
+              ".validate": "newData.hasChildren(['type', 'name'])"
+            },
+            "rfid_logs": {
+              "$logId": {
+                ".validate": "newData.hasChildren(['cardUid', 'timestamp', 'action'])",
+                "cardUid": { ".validate": "newData.isString()" },
+                "timestamp": { ".validate": "newData.isNumber()" },
+                "action": { ".validate": "newData.val().matches(/^(entry|exit)$/)" },
+                "employeeId": { ".validate": "newData.isString()" },
+                "photoUrl": { ".validate": "newData.isString()" }
+              }
+            },
+            "access_logs": {
+              "$accessId": {
+                ".validate": "newData.hasChildren(['cardUid', 'timestamp', 'accessType', 'status'])",
+                "cardUid": { ".validate": "newData.isString()" },
+                "timestamp": { ".validate": "newData.isNumber()" },
+                "accessType": { ".validate": "newData.val().matches(/^(in|out)$/)" },
+                "status": { ".validate": "newData.val().matches(/^(granted|denied)$/)" },
+                "photoUrl": { ".validate": "newData.isString()" },
+                "employeeName": { ".validate": "newData.isString()" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

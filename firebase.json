@@ -1,0 +1,33 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ips-medident",
+          "appId": "1:435865924056:android:f75f0e860880f4296282ad",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ips-medident",
+          "configurations": {
+            "android": "1:435865924056:android:f75f0e860880f4296282ad",
+            "ios": "1:435865924056:ios:ac3dfd486d843c5e6282ad",
+            "macos": "1:435865924056:ios:ac3dfd486d843c5e6282ad",
+            "web": "1:435865924056:web:07b721ee76d40b056282ad",
+            "windows": "1:435865924056:web:373480380257c5816282ad"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "ignore": ["venv", "node_modules"]
+  }
+}
