@@ -3,7 +3,6 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:medident/screens/shared/widgets/calendar_table.dart';
 import 'package:medident/screens/widgets/shared/create_appointment_sheet.dart';
@@ -17,72 +16,6 @@ class PatientHomeMobile extends StatefulWidget {
 
 class _PatientHomeMobileState extends State<PatientHomeMobile> {
   final ScrollController _scrollController = ScrollController();
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _appointments = [];
-  List<Map<String, dynamic>> _promotions = [];
-  List<Map<String, dynamic>> _treatments = [];
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final user = context.read<AuthenticateProvider>().user;
-      if (user == null) {
-        setState(() {
-          _error = 'No se encontró sesión activa';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final fs = FirebaseFirestore.instance;
-
-      final results = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        fs.collection('appointments')
-            .where('patientId', isEqualTo: user.uid)
-            .where('status', whereIn: ['pending', 'confirmed'])
-            .orderBy('date')
-            .limit(5)
-            .get(),
-        fs.collection('promotions')
-            .where('isActive', isEqualTo: true)
-            .limit(5)
-            .get(),
-        fs.collection('treatments')
-            .where('isActive', isEqualTo: true)
-            .limit(8)
-            .get(),
-      ]);
-
-      setState(() {
-        _appointments = results[0].docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
-        _promotions = results[1].docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
-        _treatments = results[2].docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Error al cargar datos: $e';
-        _isLoading = false;
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -93,27 +26,43 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthenticateProvider>().user;
+    final homeProvider = context.watch<PatientHomeProvider>();
     final userName = user?.fullName ?? 'Paciente';
+    final isLoading = homeProvider.isLoading;
+    final error = homeProvider.error;
+    final data = homeProvider.dashboardData;
+
+    final appointments = (data['appointments'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final promotions = (data['promotions'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final treatments = (data['treatments'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final globalPromotions = homeProvider.globalPromotions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => homeProvider.loadInitialData(),
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
             _buildAppBar(userName),
             _buildQuickActions(),
-            if (_isLoading) ...[
+            _buildGlobalPromotions(globalPromotions),
+            if (isLoading) ...[
               _buildShimmerSection(),
               _buildShimmerSection(),
               _buildShimmerSection(),
-            ] else if (_error != null)
-              _buildErrorSection()
+            ] else if (error != null)
+              _buildErrorSection(error, homeProvider)
             else ...[
-              _buildNextAppointment(user),
-              _buildPromotionsSection(),
-              _buildTreatmentsSection(),
+              _buildNextAppointment(user, appointments),
+              _buildPromotionsSection(promotions),
+              _buildTreatmentsSection(treatments),
               _buildHealthTips(),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
@@ -147,10 +96,12 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
                     Text(userName, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.notifications, color: Colors.white, size: 24),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                  ),
+                  child: _NotificationBadge(),
                 ),
               ],
             ),
@@ -234,8 +185,8 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
     );
   }
 
-  Widget _buildNextAppointment(user) {
-    final appts = _appointments
+  Widget _buildNextAppointment(user, List<Map<String, dynamic>> appointments) {
+    final appts = appointments
         .map((m) => AppointmentModel.fromJson(Map<String, dynamic>.from(m), m['id'] as String? ?? ''))
         .toList();
     final today = DateTime.now();
@@ -333,8 +284,8 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
     );
   }
 
-  Widget _buildPromotionsSection() {
-    if (_promotions.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+  Widget _buildPromotionsSection(List<Map<String, dynamic>> promotions) {
+    if (promotions.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -348,9 +299,9 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
               height: 140,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _promotions.length,
+                itemCount: promotions.length,
                 itemBuilder: (context, index) {
-                  final promo = _promotions[index];
+                  final promo = promotions[index];
                   return Container(
                     width: 260,
                     margin: const EdgeInsets.only(right: 12),
@@ -390,8 +341,8 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
     );
   }
 
-  Widget _buildTreatmentsSection() {
-    if (_treatments.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+  Widget _buildTreatmentsSection(List<Map<String, dynamic>> treatments) {
+    if (treatments.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -407,9 +358,9 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2, childAspectRatio: 1.3, crossAxisSpacing: 12, mainAxisSpacing: 12,
               ),
-              itemCount: _treatments.length > 4 ? 4 : _treatments.length,
+              itemCount: treatments.length > 4 ? 4 : treatments.length,
               itemBuilder: (context, index) {
-                final t = _treatments[index];
+                final t = treatments[index];
                 return Card(
                   color: Colors.white,
                   child: Padding(
@@ -491,6 +442,57 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
     );
   }
 
+  Widget _buildGlobalPromotions(List<ProductModel> promos) {
+    if (promos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: promos.length,
+            itemBuilder: (context, index) {
+              final promo = promos[index];
+              return Container(
+                width: 260,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF008080), Color(0xFF20B2AA)],
+                  ),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(promo.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if (promo.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(promo.description,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildShimmerSection() {
     return SliverToBoxAdapter(
       child: Padding(
@@ -504,7 +506,7 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
     );
   }
 
-  Widget _buildErrorSection() {
+  Widget _buildErrorSection(String error, PatientHomeProvider provider) {
     return SliverFillRemaining(
       hasScrollBody: false,
       child: Center(
@@ -513,11 +515,54 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
           children: [
             const Icon(Icons.error, color: Colors.red, size: 48),
             const SizedBox(height: 16),
-            Text(_error ?? 'Error desconocido', textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadData, child: const Text('Reintentar')),
+            ElevatedButton(onPressed: () => provider.loadInitialData(), child: const Text('Reintentar')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12)),
+      child: Stack(
+        children: [
+          const Icon(Icons.notifications, color: Colors.white, size: 24),
+          if (unreadCount > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -37,7 +37,7 @@ class _ClinicCreatedScreenState extends State<ClinicCreatedScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cp = context.watch<ClinicProvider>();
+    final cp = context.watch<DentistClinicProvider>();
     final clinic = cp.clinic;
     final clinicName = clinic?.name ?? 'Tu Clínica';
     final apiKey = clinic?.apiKey ?? '';

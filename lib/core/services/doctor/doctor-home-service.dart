@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:medident/core/models/product-model.dart';
 
 class DoctorHomeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -59,6 +60,22 @@ class DoctorHomeService {
         'appointments': [],
         'patients': [],
       };
+    }
+  }
+
+  Future<List<ProductModel>> getGlobalPromotions() async {
+    try {
+      final snap = await _firestore
+          .collection('promotions')
+          .where('scope', isEqualTo: 'global')
+          .where('isActive', isEqualTo: true)
+          .get();
+      return snap.docs
+          .map((d) => ProductModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('DoctorHomeService.getGlobalPromotions error: $e');
+      return [];
     }
   }
 }

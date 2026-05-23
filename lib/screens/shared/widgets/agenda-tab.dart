@@ -6,13 +6,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/core/models/appointment-model.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/domain/agenda-provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/services/agenda-service.dart';
 import 'package:medident/screens/widgets/shared/create_appointment_sheet.dart';
 
 class AgendaTab_Screen extends StatelessWidget {
-  const AgendaTab_Screen({super.key});
+  final String? clinicId;
+  const AgendaTab_Screen({super.key, this.clinicId});
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +20,7 @@ class AgendaTab_Screen extends StatelessWidget {
       builder: (context, aptProv, agendaProv, _) => _AgendaBody(
         appointments: aptProv.appointments,
         agendaProvider: agendaProv,
+        clinicId: clinicId,
       ),
     );
   }
@@ -28,8 +29,9 @@ class AgendaTab_Screen extends StatelessWidget {
 class _AgendaBody extends StatelessWidget {
   final List<AppointmentModel> appointments;
   final AgendaProvider agendaProvider;
+  final String? clinicId;
 
-  const _AgendaBody({required this.appointments, required this.agendaProvider});
+  const _AgendaBody({required this.appointments, required this.agendaProvider, this.clinicId});
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +79,7 @@ class _AgendaBody extends StatelessWidget {
         appointments: dayAppointments,
         currentStatus: currentStatus,
         agendaProv: agendaProv,
+        clinicId: clinicId,
       ),
     );
   }
@@ -547,10 +550,12 @@ class _DaySheet extends StatelessWidget {
   final List<AppointmentModel> appointments;
   final DayStatus currentStatus;
   final AgendaProvider agendaProv;
+  final String? clinicId;
 
   const _DaySheet({
     required this.day, required this.appointments,
     required this.currentStatus, required this.agendaProv,
+    this.clinicId,
   });
 
   static const _startHour = 7;
@@ -568,7 +573,7 @@ class _DaySheet extends StatelessWidget {
   }
 
   void _createAppointment(BuildContext context, String slot) {
-    final clinicId = context.read<ClinicProvider>().clinic?.id ?? '';
+    final cid = clinicId ?? '';
     final user = context.read<AuthenticateProvider>().user;
     showModalBottomSheet(
       context: context,
@@ -576,7 +581,7 @@ class _DaySheet extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => CreateAppointment_Widget(
         initialDate: day,
-        clinicId: clinicId,
+        clinicId: cid,
         userId: user?.uid,
         userName: user?.fullName,
         userPhoto: user?.imageUrl,

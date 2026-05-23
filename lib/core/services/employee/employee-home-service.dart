@@ -1,38 +1,72 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:medident/core/models/product-model.dart';
 
 class EmployeeHomeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<Map<String, dynamic>> getEmployeeDashboard(String uid) async {
     try {
-      final results = await Future.wait([
-        _firestore.collection('users').doc(uid).get(),
-        _firestore.collection('posts').where('userId', isEqualTo: uid).limit(100).get(),
-        _firestore.collection('turnos')
-            .where('employeeId', isEqualTo: uid)
-            .where('date', isGreaterThanOrEqualTo: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
-            .get(),
-      ]);
-
-      final userDoc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-      final postsSnap = results[1] as QuerySnapshot<Map<String, dynamic>>;
-      final turnosSnap = results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final userDoc = await _firestore.collection('users').doc(uid).get();
 
       return {
         'userName': userDoc.data()?['fullName'] ?? '',
         'userPhoto': userDoc.data()?['imageUrl'] ?? '',
-        'totalPosts': postsSnap.docs.length,
-        'todayShifts': turnosSnap.docs.length,
       };
     } catch (e) {
       debugPrint('EmployeeHomeService.getEmployeeDashboard error: $e');
       return {
         'userName': '',
         'userPhoto': '',
-        'totalPosts': 0,
-        'todayShifts': 0,
       };
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTurnos(String uid) async {
+    try {
+      final snap = await _firestore
+          .collection('turnos')
+          .where('employeeId', isEqualTo: uid)
+          .where('status', whereIn: ['scheduled', 'in_progress'])
+          .orderBy('date')
+          .limit(5)
+          .get();
+      return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    } catch (e) {
+      debugPrint('EmployeeHomeService.getTurnos error: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAlerts(String uid) async {
+    try {
+      final snap = await _firestore
+          .collection('alerts')
+          .where('userId', isEqualTo: uid)
+          .where('read', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .limit(5)
+          .get();
+      return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    } catch (e) {
+      debugPrint('EmployeeHomeService.getAlerts error: $e');
+      return [];
+    }
+  }
+
+  Future<List<ProductModel>> getGlobalPromotions() async {
+    try {
+      final snap = await _firestore
+          .collection('promotions')
+          .where('scope', isEqualTo: 'global')
+          .where('isActive', isEqualTo: true)
+          .get();
+      return snap.docs
+          .map((d) => ProductModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('EmployeeHomeService.getGlobalPromotions error: $e');
+      return [];
     }
   }
 }

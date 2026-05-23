@@ -1,66 +1,93 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/core/models/roles/dentist/dentist-security-model.dart';
-import 'package:medident/core/utils/app-constant.dart';
-import 'package:medident/core/utils/app-textstyle.dart';
 import 'package:medident/main_export.dart';
+import 'package:provider/provider.dart';
 
-/// Widget para control de acceso
 class DentistAccessControl extends StatelessWidget {
   const DentistAccessControl({super.key});
 
+  static const _darkText = Color(0xFF1D1D1F);
+  static const _cardBg = Color(0xFFF5F5F7);
+
   @override
   Widget build(BuildContext context) {
-    debugPrint('[DentistAccessControl] build() iniciado');
-    
-    final doors = [
-      {'name': 'Puerta Principal', 'status': 'Desbloqueada', 'time': '09:30 AM', 'icon': 'ðŸŸ¢'},
-      {'name': 'Puerta Consultorio 1', 'status': 'Bloqueada', 'time': '10:15 AM', 'icon': 'ðŸ”´'},
-      {'name': 'Puerta Consultorio 2', 'status': 'Desbloqueada', 'time': '10:20 AM', 'icon': 'ðŸŸ¢'},
-    ];
+    final provider = context.watch<DentistSecurityProvider>();
+    final profile = provider.securityData;
+
+    final doors = profile?.doors ?? [];
+    if (doors.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ðŸšª Control de Acceso', style: AppTextStyles.headlineSmall),
-            const SizedBox(height: AppConstants.paddingM),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: doors.length,
-              itemBuilder: (context, index) {
-                final door = doors[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: AppConstants.paddingS),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppConstants.paddingM),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(door['name']!, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(door['status']!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey700)),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(door['icon']!, style: const TextStyle(fontSize: 24)),
-                            const SizedBox(height: 4),
-                            Text(door['time']!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey600)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+            const Text(
+              'Control de Acceso',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _darkText,
+                letterSpacing: -0.3,
+              ),
             ),
+            const SizedBox(height: 14),
+            ...doors.map((door) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: (door.isOn ? const Color(0xFF34C759) : const Color(0xFFFF3B30)).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        door.isOn ? Icons.lock_open_outlined : Icons.lock_outlined,
+                        color: door.isOn ? const Color(0xFF34C759) : const Color(0xFFFF3B30),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            door.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _darkText,
+                            ),
+                          ),
+                          Text(
+                            door.isOn ? 'Desbloqueada' : 'Bloqueada',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: door.isOn ? const Color(0xFF34C759) : const Color(0xFFFF3B30),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      door.isOn ? Icons.check_circle : Icons.cancel,
+                      color: door.isOn ? const Color(0xFF34C759) : const Color(0xFFFF3B30),
+                      size: 22,
+                    ),
+                  ],
+                ),
+              ),
+            )),
           ],
         ),
       ),

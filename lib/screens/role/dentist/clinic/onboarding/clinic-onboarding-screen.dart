@@ -236,7 +236,7 @@ class _ClinicOnboardingScreenState extends State<ClinicOnboardingScreen>
     debugPrint('[ONBOARDING] _navigateToCreate');
     try {
       final main = context.read<DentistMainProvider>();
-      final cp = context.read<ClinicProvider>();
+      final cp = context.read<DentistClinicProvider>();
       debugPrint('[ONBOARDING] Providers ok — status: ${cp.status}');
       Navigator.push(
         context,
@@ -259,7 +259,7 @@ class _ClinicOnboardingScreenState extends State<ClinicOnboardingScreen>
     debugPrint('[ONBOARDING] _navigateToJoin');
     try {
       final main = context.read<DentistMainProvider>();
-      final cp = context.read<ClinicProvider>();
+      final cp = context.read<DentistClinicProvider>();
       Navigator.push(
         context,
         MaterialPageRoute(

@@ -2,15 +2,15 @@
 import 'package:provider/provider.dart';
 import '../providers/network/network-provider.dart';
 
-class NetworkUtils extends StatefulWidget {
+class Network_Utils extends StatefulWidget {
   final Widget child;
-  const NetworkUtils({super.key, required this.child});
+  const Network_Utils({super.key, required this.child});
 
   @override
-  State<NetworkUtils> createState() => _NetworkUtilsState();
+  State<Network_Utils> createState() => _Network_UtilsState();
 }
 
-class _NetworkUtilsState extends State<NetworkUtils> {
+class _Network_UtilsState extends State<Network_Utils> {
   @override
   Widget build(BuildContext context) {
     return Consumer<NetworkProvider>(

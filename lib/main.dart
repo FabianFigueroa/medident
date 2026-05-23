@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:medident/core/providers/network/network-provider.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/firebase_options.dart';
 import 'package:medident/main_export.dart';
@@ -83,8 +84,8 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           return Stack(
             children: [
-              NetworkUtils(child: child!),
-              const NetworkBannerUtils(),
+              Network_Utils(child: child!),
+              const NetworkBanner_Utils(),
             ],
           );
         },

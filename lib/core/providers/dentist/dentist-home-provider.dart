@@ -942,23 +942,38 @@ class DentistHomeProvider with ChangeNotifier {
     }
   }
 
-  Future<String> createStory(
-      {required String imageUrl, String? text}) async {
+  Future<String> createStory({
+    required String imageUrl,
+    String? text,
+    String? sourceType,
+    String? sourceId,
+    String? sourceName,
+    String? sourcePhoto,
+  }) async {
     if (_userId.isEmpty) throw Exception('Usuario no autenticado');
     try {
       final id = await _service.createStory(
         userId: _userId,
         imageUrl: imageUrl,
         text: text,
+        sourceType: sourceType,
+        sourceId: sourceId,
+        sourceName: sourceName,
+        sourcePhoto: sourcePhoto,
       );
+      final clinicalSourceName = sourceType == 'clinical' ? sourceName ?? sourceId : null;
       final newStory = StoryModel(
         id: id,
         userId: _userId,
-        userName: _currentUserName,
-        userPhoto: _currentUserPhoto.isNotEmpty ? _currentUserPhoto : null,
+        userName: clinicalSourceName ?? _currentUserName,
+        userPhoto: sourcePhoto ?? (_currentUserPhoto.isNotEmpty ? _currentUserPhoto : null),
         imageUrl: imageUrl,
         isActive: true,
         createdAt: DateTime.now(),
+        sourceType: sourceType ?? 'user',
+        sourceId: sourceId ?? _userId,
+        sourceName: clinicalSourceName ?? _currentUserName,
+        sourcePhoto: sourcePhoto ?? _currentUserPhoto,
       );
       _stories.insert(0, newStory);
       _currentUserStories.insert(0, newStory);

@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 
-class Appbar_Container_Widget extends StatelessWidget implements PreferredSizeWidget {
+class Appbar_Center_Widget extends StatelessWidget implements PreferredSizeWidget {
   final HugeIcon? leftIcon;
   final HugeIcon? rightIcon;
   final String? title;
@@ -18,7 +18,7 @@ class Appbar_Container_Widget extends StatelessWidget implements PreferredSizeWi
   final Color? backgroundColor;
   final bool showGradientTitle;
 
-  const Appbar_Container_Widget({
+  const Appbar_Center_Widget({
     Key? key,
     this.leftIcon,
     this.rightIcon,

@@ -46,15 +46,29 @@ class DentistSecurityModel {
   // Propiedades para lectores RFID
   List<RfidReaderModel> readers;
 
+  // Propiedades de suscripción
+  final DateTime? subscriptionExpiresAt;
+  final DateTime? lastPaymentDate;
+  final String? paymentStatus;
+  final String? suspensionReason;
+  final DateTime? suspendedAt;
+
   // Getters de alias para compatibilidad con el widget
   List<DentistRfidCardModel> get rfidCards => cards;
+  bool get isSubscriptionActive =>
+      contractStatus == 'active' &&
+      (subscriptionExpiresAt == null || subscriptionExpiresAt!.isAfter(DateTime.now()));
+  bool get isSubscriptionExpired =>
+      contractStatus == 'active' &&
+      subscriptionExpiresAt != null &&
+      subscriptionExpiresAt!.isBefore(DateTime.now());
 
   DentistSecurityModel({
     required this.userId,
     required this.locationId,
     this.dentistName = '',
     this.dentistEmail = '',
-    this.contractStatus = 'inactive', // Valor por defecto
+    this.contractStatus = 'inactive',
     this.address = '',
     this.employeeCount = 0,
     this.contractStartDate,
@@ -70,11 +84,16 @@ class DentistSecurityModel {
     this.tvs = const [],
     this.voices = const [],
     this.doors = const [],
-       this.securityLogs = const [],
-       this.readers = const [],
-       this.activeLedOption,
-       this.esp32CamIp,
-     });
+    this.securityLogs = const [],
+    this.readers = const [],
+    this.activeLedOption,
+    this.esp32CamIp,
+    this.subscriptionExpiresAt,
+    this.lastPaymentDate,
+    this.paymentStatus,
+    this.suspensionReason,
+    this.suspendedAt,
+  });
 
   // Convertir un Documento de Firestore a nuestro modelo
   factory DentistSecurityModel.fromFirestore(DocumentSnapshot doc) {
@@ -124,6 +143,11 @@ class DentistSecurityModel {
                ?.map((d) => Device.fromMap(d))
                .toList() ??
            [],
+       subscriptionExpiresAt: (data['subscriptionExpiresAt'] as Timestamp?)?.toDate(),
+       lastPaymentDate: (data['lastPaymentDate'] as Timestamp?)?.toDate(),
+       paymentStatus: data['paymentStatus'],
+       suspensionReason: data['suspensionReason'],
+       suspendedAt: (data['suspendedAt'] as Timestamp?)?.toDate(),
        activeLedOption: data['activeLedOption'],
        esp32CamIp: data['esp32CamIp'],
        readers: (data['readers'] as List<dynamic>?)
@@ -156,6 +180,11 @@ class DentistSecurityModel {
       'tvs': tvs.map((tv) => tv.toMap()).toList(),
       'voices': voices.map((voice) => voice.toMap()).toList(),
       'doors': doors.map((door) => door.toMap()).toList(),
+      'subscriptionExpiresAt': subscriptionExpiresAt != null ? Timestamp.fromDate(subscriptionExpiresAt!) : null,
+      'lastPaymentDate': lastPaymentDate != null ? Timestamp.fromDate(lastPaymentDate!) : null,
+      'paymentStatus': paymentStatus,
+      'suspensionReason': suspensionReason,
+      'suspendedAt': suspendedAt != null ? Timestamp.fromDate(suspendedAt!) : null,
       'activeLedOption': activeLedOption,
        'esp32CamIp': esp32CamIp,
        'readers': readers.map((r) => r.toMap()).toList(),

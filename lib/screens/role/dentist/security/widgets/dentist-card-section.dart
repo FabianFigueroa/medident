@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
 

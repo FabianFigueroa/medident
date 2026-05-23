@@ -1,8 +1,10 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:medident/core/models/user-model.dart';
+import 'package:medident/core/models/roles/user_role.dart';
 import 'package:table_calendar/table_calendar.dart';
-// import 'package:medident/core/models/user-model.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 class MedicalSchedulerWidget extends StatefulWidget {
   final List<UserModel> allUsers;
@@ -20,6 +22,59 @@ class _MedicalSchedulerWidgetState extends State<MedicalSchedulerWidget> {
   // Simulamos una base de datos de citas ya agendadas   ****aca debemos agregar mas tiempos para seleccionar la hora o media hora
   // Estructura: { "2026-04-20": ["09:00 AM", "10:30 AM"] }
   final Map<String, List<Map<String, dynamic>>> _bookedAppointments = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAppointmentsForDate(DateTime.now());
+    });
+  }
+
+  Future<void> _loadAppointmentsForDate(DateTime date) async {
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+          .get();
+
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      final Map<String, List<Map<String, dynamic>>> loadedAppts = {};
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final timeSlot = data['timeSlot'] as String? ?? 'Sin horario';
+        final patientName = data['patientName'] as String? ?? 'Paciente';
+        final patientPhoto = data['patientPhoto'] as String?;
+
+        final user = UserModel(
+          uid: data['patientId'] as String? ?? '',
+          email: '',
+          fullName: patientName,
+          role: UserRole.patient,
+          phoneNumber: data['patientPhone'] as String?,
+          imageUrl: patientPhoto,
+        );
+
+        if (!loadedAppts.containsKey(key)) {
+          loadedAppts[key] = [];
+        }
+        loadedAppts[key]!.add({'time': timeSlot, 'user': user});
+      }
+
+      if (mounted) {
+        setState(() {
+          _bookedAppointments.clear();
+          _bookedAppointments.addAll(loadedAppts);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading appointments: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +155,7 @@ class _MedicalSchedulerWidgetState extends State<MedicalSchedulerWidget> {
             _selectedDay = selectedDay;
             _focusedDay = focusedDay;
           });
+          _loadAppointmentsForDate(selectedDay);
           _showNewAppointmentSheet(context, selectedDay);
         },
       ),
@@ -252,12 +308,27 @@ class _MedicalSchedulerWidgetState extends State<MedicalSchedulerWidget> {
                   backgroundColor: const Color.fromARGB(255, 117, 214, 218),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 ),
-                onPressed: (selectedUser != null && selectedTime != null) ? () {
-                  setState(() {
-                    if (!_bookedAppointments.containsKey(key)) _bookedAppointments[key] = [];
-                    _bookedAppointments[key]!.add({'time': selectedTime, 'user': selectedUser});
-                  });
-                  Navigator.pop(context);
+                onPressed: (selectedUser != null && selectedTime != null) ? () async {
+                  try {
+                    await FirebaseFirestore.instance.collection('appointments').add({
+                      'patientId': selectedUser!.uid,
+                      'patientName': selectedUser!.fullName,
+                      'patientPhoto': selectedUser!.imageUrl,
+                      'dentistId': '',
+                      'date': Timestamp.fromDate(date),
+                      'timeSlot': selectedTime,
+                      'status': 'pending',
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+                    if (context.mounted) Navigator.pop(context);
+                    await _loadAppointmentsForDate(date);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error al agendar: $e')),
+                      );
+                    }
+                  }
                 } : null,
                 child: const Text("AGENDAR AHORA", style: TextStyle(color: Colors.white)),
               ),

@@ -3,7 +3,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/services/clinic-service.dart';
 import 'package:medident/core/utils/responsive.dart';
 import 'package:medident/screens/role/dentist/clinic/dentist_clinic_mobile.dart';
@@ -36,7 +36,7 @@ class _DentistClinicScreenState extends State<DentistClinicScreen> {
       if (user?.clinicId != null && user!.clinicId!.isNotEmpty) {
         // Fast path: user.clinicId is cached — skip Firestore read,
         // show dashboard immediately, refresh full clinic data in background.
-        final cp = ClinicProvider(service: ClinicService());
+        final cp = DentistClinicProvider(service: ClinicService());
         cp.setCachedStatus(isOwner: user.isClinicOwner);
         mainProvider.registerSectionProvider('clinicStatus', cp);
         await cp.refreshFromClinicId(user.clinicId!, userId);

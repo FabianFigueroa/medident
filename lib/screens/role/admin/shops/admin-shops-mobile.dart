@@ -1,8 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/admin/admin-main-provider.dart';
-import 'package:medident/core/providers/admin/admin-shops-provider.dart';
 
 class AdminShopsMobile extends StatelessWidget {
   const AdminShopsMobile({super.key});

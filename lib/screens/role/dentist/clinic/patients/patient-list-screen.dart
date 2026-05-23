@@ -25,7 +25,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ClinicProvider>(
+    return Consumer<DentistClinicProvider>(
       builder: (context, cp, _) {
         return StreamBuilder<List<PatientModel>>(
           stream: cp.streamPatients(_searchQuery),
@@ -143,7 +143,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => ChangeNotifierProvider.value(
-                  value: context.read<ClinicProvider>(),
+                  value: context.read<DentistClinicProvider>(),
                   child: PatientDetailScreen(patient: patient),
                 ),
               ),

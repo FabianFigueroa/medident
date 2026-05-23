@@ -379,7 +379,7 @@ class _PromotionEditorScreenState extends State<PromotionEditorScreen> with Tick
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         decoration: BoxDecoration(
           color: const Color(0xFF0EA5A4).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -399,7 +399,7 @@ class _PromotionEditorScreenState extends State<PromotionEditorScreen> with Tick
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       clipBehavior: Clip.antiAlias,

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:medident/core/providers/dentist/dentist-profile-provider.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/header_container_widget.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-gallery-widget.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-services-widget.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-info-widget.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-profile-header-widget.dart';
-import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
 import 'package:medident/main_export.dart';
 
 class DentistProfile_Mobile extends StatelessWidget {
@@ -60,7 +58,7 @@ class DentistProfile_Mobile extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: const Color(0xFFF5F7FB),
-          appBar: Appbar_Container_Widget(
+          appBar: Appbar_Center_Widget(
             leftIcon: const HugeIcon(
               icon: HugeIcons.strokeRoundedHospital01,
               size: 24,
@@ -111,10 +109,11 @@ class DentistProfile_Mobile extends StatelessWidget {
                   promotions: profileProvider.promotions,
                   featuredPosts: profileProvider.featuredPosts,
                   showFeaturedPosts: true,
-                  onPromotionEdit: () => _handleEditPromotion(profileProvider),
-                  onPromotionDelete: () => _handleDeletePromotion(profileProvider),
-                  onPromotionShare: () => _handleSharePromotion(profileProvider),
-                  onFeaturedPostTap: () => _handleFeaturedPostTap(),
+                  onPromotionEdit: () => _handleEditPromotion(context, profileProvider),
+                  onPromotionDelete: () => _handleDeletePromotion(context, profileProvider),
+                  onPromotionShare: () => _handleSharePromotion(context, profileProvider),
+                  onFeaturedPostTap: () => _handleFeaturedPostTap(context),
+                  onPickVideo: () => _handlePickVideo(context),
                 ),
               ),
               SliverToBoxAdapter(
@@ -128,14 +127,15 @@ class DentistProfile_Mobile extends StatelessWidget {
                 child: DentistServicesWidget(
                   services: profileProvider.services,
                   isOwnProfile: isOwnProfile,
-                  onServiceTap: (int index) => debugPrint('Service: $index'),
+                  onServiceTap: (int index) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Servicio ${index + 1}'), behavior: SnackBarBehavior.floating)),
                 ),
               ),
               SliverToBoxAdapter(
                 child: DentistGalleryWidget(
                   images: profileProvider.galleryImages,
                   isOwnProfile: isOwnProfile,
-                  onImageTap: (int index) => debugPrint('Image: $index'),
+                  onImageTap: (int index) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imagen ${index + 1}'), behavior: SnackBarBehavior.floating)),
+                  onPickVideo: () => _handlePickVideo(context),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 60)),
@@ -158,19 +158,68 @@ class DentistProfile_Mobile extends StatelessWidget {
     }
   }
 
-  void _handleEditPromotion(DentistProfileProvider provider) {
-    debugPrint('Editar promoción - Implementar lógica de navegación a pantalla de edición');
+  void _handleEditPromotion(BuildContext context, DentistProfileProvider provider) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Editar promoción - Próximamente disponible'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  void _handleDeletePromotion(DentistProfileProvider provider) {
-    debugPrint('Eliminar promoción - Implementar lógica de eliminación');
+  void _handleDeletePromotion(BuildContext context, DentistProfileProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar promoción'),
+        content: const Text('¿Estás seguro de eliminar esta promoción?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(
+                  content: Text('Promoción eliminada'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _handleSharePromotion(DentistProfileProvider provider) {
-    debugPrint('Compartir promoción - Implementar lógica de compartir');
+  void _handleSharePromotion(BuildContext context, DentistProfileProvider provider) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Enlace de promoción copiado al portapapeles'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  void _handleFeaturedPostTap() {
-    debugPrint('Post destacado tocado - Implementar lógica de navegación');
+  void _handleFeaturedPostTap(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Post destacado - Próximamente disponible'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _handlePickVideo(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Selecciona un video de tu galería'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

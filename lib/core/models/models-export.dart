@@ -29,3 +29,4 @@ export 'roles/dentist/dentist-sensor-model.dart';
 export 'delivery/delivery-export.dart';
 export 'data/users-en-linea.dart';
 export 'test-stories.dart';
+export 'notification-model.dart';

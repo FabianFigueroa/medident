@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:medident/core/models/user-model.dart';
 import 'package:medident/core/services/dentist/dentist-home-services.dart';
+import 'package:medident/screens/widgets/follows/follow-button.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
+  final String? currentUserId;
 
-  const PublicProfileScreen({super.key, required this.userId});
+  const PublicProfileScreen({super.key, required this.userId, this.currentUserId});
 
   @override
   State<PublicProfileScreen> createState() => _PublicProfileScreenState();
@@ -39,7 +41,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _user == null
               ? const Center(child: Text('Usuario no encontrado'))
-              : Padding(
+              : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
@@ -63,6 +65,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       if (_user!.email.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(_user!.email, style: TextStyle(color: Colors.grey[600])),
+                      ],
+                      if (widget.currentUserId != null && widget.currentUserId != widget.userId) ...[
+                        const SizedBox(height: 16),
+                        FollowButton(
+                          currentUserId: widget.currentUserId!,
+                          targetUserId: widget.userId,
+                        ),
                       ],
                     ],
                   ),

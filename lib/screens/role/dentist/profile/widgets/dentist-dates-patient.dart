@@ -1,10 +1,24 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:medident/core/models/appointment-model.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-panel-shell.dart';
 
 class DentistDates_Widget extends StatelessWidget {
   final List<AppointmentModel> appointments;
 
-  const DentistDates_Widget({required this.appointments});
+  const DentistDates_Widget({super.key, required this.appointments});
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'confirmed':
+        return const Color(0xFF0F766E);
+      case 'pending':
+        return const Color(0xFFEA580C);
+      case 'cancelled':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFF1D4ED8);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,28 +38,27 @@ class DentistDates_Widget extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    ////////////////////////////////////////////////////////
                     Container(
                       width: 60,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: appointment.color.withValues(alpha: 0.15),
+                        color: _statusColor(appointment.status).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
                         children: [
                           Text(
-                            appointment.time,
+                            appointment.timeSlot,
                             style: TextStyle(
-                              color: appointment.color,
+                              color: _statusColor(appointment.status),
                               fontFamily: 'Ubuntu-Bold',
                               fontSize: 15,
                             ),
                           ),
                           const SizedBox(height: 3),
-                          Text(
-                            appointment.duration,
-                            style: const TextStyle(
+                          const Text(
+                            '—',
+                            style: TextStyle(
                               fontSize: 11,
                               color: Color(0xFF64748B),
                               fontFamily: 'Ubuntu-Regular',
@@ -60,7 +73,7 @@ class DentistDates_Widget extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            appointment.patient,
+                            appointment.patientName,
                             style: const TextStyle(
                               fontSize: 15,
                               color: Color(0xFF0F172A),
@@ -69,7 +82,7 @@ class DentistDates_Widget extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            appointment.procedure,
+                            appointment.treatmentName,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Color(0xFF475569),
@@ -77,9 +90,9 @@ class DentistDates_Widget extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            appointment.room,
-                            style: const TextStyle(
+                          const Text(
+                            'Consultorio',
+                            style: TextStyle(
                               fontSize: 11,
                               color: Color(0xFF0F766E),
                               fontFamily: 'Ubuntu-Medium',
@@ -88,21 +101,19 @@ class DentistDates_Widget extends StatelessWidget {
                         ],
                       ),
                     ),
-                    ///
-                    ////////////////////////////////////////////////////
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 15,
                         vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: appointment.color.withValues(alpha: 0.10),
+                        color: _statusColor(appointment.status).withOpacity(0.10),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         appointment.status,
                         style: TextStyle(
-                          color: appointment.color,
+                          color: _statusColor(appointment.status),
                           fontSize: 11,
                           fontFamily: 'Ubuntu-Bold',
                         ),
@@ -117,55 +128,3 @@ class DentistDates_Widget extends StatelessWidget {
     );
   }
 }
-
-
-class AppointmentModel {
-  final String time;
-  final String duration;
-  final String patient;
-  final String procedure;
-  final String room;
-  final String status;
-  final Color color;
-
-  const AppointmentModel({
-    required this.time,
-    required this.duration,
-    required this.patient,
-    required this.procedure,
-    required this.room,
-    required this.status,
-    required this.color,
-  });
-}
-
-
-const List<AppointmentModel> mockAppointmentsList = [
-  AppointmentModel(
-    time: '08:30',
-    duration: '45 min',
-    patient: 'Daniela Ruiz',
-    procedure: 'Valoracion integral y plan cosmetico',
-    room: 'Consultorio 2',
-    status: 'Confirmada',
-    color: Color(0xFF0F766E),
-  ),
-  AppointmentModel(
-    time: '10:15',
-    duration: '60 min',
-    patient: 'Carlos Medina',
-    procedure: 'Ajuste de ortodoncia con control fotografico',
-    room: 'Sala digital',
-    status: 'En espera',
-    color: Color(0xFFEA580C),
-  ),
-  AppointmentModel(
-    time: '12:00',
-    duration: '30 min',
-    patient: 'Laura Camelo',
-    procedure: 'Seguimiento post operatorio',
-    room: 'Consultorio 1',
-    status: 'Rapida',
-    color: Color(0xFF1D4ED8),
-  ),
-];

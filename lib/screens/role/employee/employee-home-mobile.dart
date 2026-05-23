@@ -1,9 +1,9 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EmployeeHomeMobile extends StatefulWidget {
   const EmployeeHomeMobile({super.key});
@@ -14,61 +14,13 @@ class EmployeeHomeMobile extends StatefulWidget {
 
 class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
   final ScrollController _scrollController = ScrollController();
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _turnos = [];
-  List<Map<String, dynamic>> _alerts = [];
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<EmployeeHomeProvider>().loadInitialData();
     });
-
-    try {
-      final user = context.read<AuthenticateProvider>().user;
-      if (user == null) {
-        setState(() {
-          _error = 'No se encontró sesión activa';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final fs = FirebaseFirestore.instance;
-
-      final results = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        fs.collection('turnos')
-            .where('employeeId', isEqualTo: user.uid)
-            .where('status', whereIn: ['scheduled', 'in_progress'])
-            .orderBy('date')
-            .limit(5)
-            .get(),
-        fs.collection('alerts')
-            .where('userId', isEqualTo: user.uid)
-            .where('read', isEqualTo: false)
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get(),
-      ]);
-
-      setState(() {
-        _turnos = results[0].docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _alerts = results[1].docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Error al cargar datos: $e';
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -80,26 +32,32 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthenticateProvider>().user;
+    final provider = context.watch<EmployeeHomeProvider>();
     final employeeName = user?.fullName ?? 'Empleado';
-    final position = _error == null ? 'Empleado' : '';
+    final isLoading = provider.isLoading;
+    final error = provider.error;
+    final turnos = provider.turnos;
+    final alerts = provider.alerts;
+    final globalPromotions = provider.globalPromotions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => context.read<EmployeeHomeProvider>().loadInitialData(),
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            _buildAppBar(employeeName, position),
+            _buildAppBar(employeeName),
             _buildQuickActions(),
-            if (_isLoading) ...[
+            _buildGlobalPromotions(globalPromotions),
+            if (isLoading) ...[
               _buildShimmerSection(),
               _buildShimmerSection(),
-            ] else if (_error != null)
-              _buildErrorSection()
+            ] else if (error != null)
+              _buildErrorSection(error)
             else ...[
-              _buildTurnosSection(),
-              _buildAlertsSection(),
+              _buildTurnosSection(turnos),
+              if (alerts.isNotEmpty) _buildAlertsSection(alerts),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ],
@@ -108,7 +66,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     );
   }
 
-  Widget _buildAppBar(String name, String position) {
+  Widget _buildAppBar(String name) {
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
@@ -123,20 +81,14 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
               children: [
                 const Text('Hola,', style: TextStyle(color: Colors.white70, fontSize: 16)),
                 Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                if (position.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                    child: Text(position, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                  ),
-                ],
               ],
             ),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.notifications, color: Colors.white, size: 24),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              ),
+              child: _NotificationBadge(),
             ),
           ],
         ),
@@ -215,7 +167,58 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     );
   }
 
-  Widget _buildTurnosSection() {
+  Widget _buildGlobalPromotions(List<ProductModel> promos) {
+    if (promos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: promos.length,
+            itemBuilder: (context, index) {
+              final promo = promos[index];
+              return Container(
+                width: 260,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+                  ),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(promo.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if (promo.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(promo.description,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTurnosSection(List<Map<String, dynamic>> turnos) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -230,7 +233,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
               ],
             ),
             const SizedBox(height: 12),
-            if (_turnos.isEmpty)
+            if (turnos.isEmpty)
               Card(
                 color: Colors.white,
                 child: Padding(
@@ -245,7 +248,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
                 ),
               )
             else
-              ..._turnos.map((turno) => _turnoCard(turno)).toList(),
+              ...turnos.map((turno) => _turnoCard(turno)).toList(),
           ],
         ),
       ),
@@ -283,9 +286,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     );
   }
 
-  Widget _buildAlertsSection() {
-    if (_alerts.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
+  Widget _buildAlertsSection(List<Map<String, dynamic>> alerts) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -300,7 +301,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
               ],
             ),
             const SizedBox(height: 12),
-            ..._alerts.map((alert) => _alertCard(alert)).toList(),
+            ...alerts.map((alert) => _alertCard(alert)).toList(),
           ],
         ),
       ),
@@ -340,7 +341,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     );
   }
 
-  Widget _buildErrorSection() {
+  Widget _buildErrorSection(String error) {
     return SliverFillRemaining(
       hasScrollBody: false,
       child: Center(
@@ -349,11 +350,57 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
           children: [
             const Icon(Icons.error, color: Colors.red, size: 48),
             const SizedBox(height: 16),
-            Text(_error ?? 'Error desconocido', textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadData, child: const Text('Reintentar')),
+            ElevatedButton(
+              onPressed: () => context.read<EmployeeHomeProvider>().loadInitialData(),
+              child: const Text('Reintentar'),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12)),
+      child: Stack(
+        children: [
+          const Icon(Icons.notifications, color: Colors.white, size: 24),
+          if (unreadCount > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

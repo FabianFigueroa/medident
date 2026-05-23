@@ -506,8 +506,8 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
     });
 
     try {
-      final cp = context.read<ClinicProvider>();
-      debugPrint('[CREATE_CLINIC] ClinicProvider obtenido: ${cp.hashCode}');
+      final cp = context.read<DentistClinicProvider>();
+      debugPrint('[CREATE_CLINIC] DentistClinicProvider obtenido: ${cp.hashCode}');
 
       final main = context.read<DentistMainProvider>();
       debugPrint('[CREATE_CLINIC] DentistMainProvider obtenido');

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/screens/widgets/shared/patient_search_sheet.dart';
 import 'package:medident/screens/widgets/shared/dentist_search_sheet.dart';
 
@@ -81,7 +81,7 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
   Future<void> _loadTreatments() async {
     if (_clinicId.isEmpty) {
       try {
-        _clinicId = context.read<ClinicProvider>().clinic?.id ?? '';
+        _clinicId = context.read<DentistClinicProvider>().clinic?.id ?? '';
       } catch (_) {}
     }
     if (_clinicId.isEmpty) {
@@ -89,7 +89,7 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
       return;
     }
     try {
-      final cp = context.read<ClinicProvider>();
+      final cp = context.read<DentistClinicProvider>();
       if (cp.treatments.isEmpty) await cp.loadTreatments();
       if (mounted) setState(() {
         _treatments = cp.treatments;
@@ -111,7 +111,7 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
   Widget build(BuildContext context) {
     if (_clinicId.isEmpty) {
       try {
-        _clinicId = context.read<ClinicProvider>().clinic?.id ?? '';
+        _clinicId = context.read<DentistClinicProvider>().clinic?.id ?? '';
       } catch (_) {}
     }
     if (widget.isPatientMode) {

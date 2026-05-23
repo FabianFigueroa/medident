@@ -1,14 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
-import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 
-class PatientProfileScreen extends StatelessWidget {
+class PatientProfileScreen extends StatefulWidget {
   const PatientProfileScreen({super.key});
+
+  @override
+  State<PatientProfileScreen> createState() => _PatientProfileScreenState();
+}
+
+class _PatientProfileScreenState extends State<PatientProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final mainProvider = context.read<PatientMainProvider>();
+      await mainProvider.initializeSection('profile');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PatientMainProvider>(
+      builder: (context, mainProvider, child) {
+        if (mainProvider.isSectionLoading('profile') || mainProvider.profileProvider == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final error = mainProvider.getSectionError('profile');
+        if (error != null) {
+          return Scaffold(
+            body: Center(child: Text('Error al cargar perfil: $error')),
+          );
+        }
+
+        return ChangeNotifierProvider.value(
+          value: mainProvider.profileProvider!,
+          child: const _ProfileContent(),
+        );
+      },
+    );
+  }
+}
+
+class _ProfileContent extends StatelessWidget {
+  const _ProfileContent();
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthenticateProvider>().user;
+    final profileProvider = context.watch<PatientProfileProvider>();
+    final profile = profileProvider.userProfile;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -32,7 +76,8 @@ class PatientProfileScreen extends StatelessWidget {
                   Text(user?.fullName ?? 'Paciente',
                       style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text(user?.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text(profile?['email'] ?? user?.email ?? '',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14)),
                 ],
               ),
             ),

@@ -4,13 +4,13 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/screens/role/dentist/widget/jobs_one_widget.dart';
 import 'package:medident/screens/role/dentist/widget/suggested-follow-widget.dart';
-import 'package:medident/screens/widgets/appbar/appbar-center.dart';
 import 'package:medident/screens/widgets/carousel/promotions-carousel-widget.dart';
-import 'package:medident/screens/widgets/creator/creator-hub-widget.dart';
 import 'package:medident/screens/widgets/scrolls/stories-scroll-widget.dart';
 import 'package:medident/screens/shared/public-profile-screen.dart';
+import 'package:medident/screens/shared/notification-screen.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
+import 'package:medident/core/providers/notification/notification-provider.dart';
 import 'package:medident/screens/role/dentist/widget/post_one_widget.dart';
 import 'package:medident/core/models/story-model.dart';
 import 'package:medident/screens/role/dentist/widget/treatments-one-widget.dart';
@@ -128,9 +128,6 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = context.select<DentistHomeProvider, String>((p) => p.userId);
-    final userName = context.select<DentistHomeProvider, String>((p) => p.currentUserName);
-    final userPhoto = context.select<DentistHomeProvider, String>((p) => p.currentUserPhoto);
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () => context.read<DentistHomeProvider>().refreshAll(),
@@ -146,11 +143,7 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
           ],
         ),
       ),
-      floatingActionButton: CreatorHubWidget(
-        userId: userId.isNotEmpty ? userId : 'user_dentist_1',
-        userName: userName.isNotEmpty ? userName : 'Usuario',
-        userPhoto: userPhoto.isNotEmpty ? userPhoto : '',
-      ),
+      floatingActionButton: const SizedBox.shrink(),
     );
   }
 }
@@ -161,14 +154,48 @@ class _AppBarSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = context.select<DentistHomeProvider, String>((p) => p.userId);
     return SliverToBoxAdapter(
-      child: Appbar_Container_Widget(
-        title: context.select<DentistHomeProvider, String>((p) => p.userId),
-        leftIcon: HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01, size: 28),
-        rightIcon: HugeIcon(icon: HugeIcons.strokeRoundedSearch01, size: 28),
-        leftIconTap: () => Navigator.pop(context),
-        rightIconTap: () => Navigator.pop(context),
-        backgroundColor: Colors.white,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        color: Colors.white,
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: HugeIcon(
+                  icon: HugeIcons.strokeRoundedArrowLeft01,
+                  color: Colors.grey,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationScreen()),
+              ),
+              child: _NotificationBadge(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -212,10 +239,10 @@ class _StoriesSection extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PublicProfileScreen(userId: userId),
-            ),
-          );
-        },
+                        builder: (_) => PublicProfileScreen(userId: userId, currentUserId: provider.userId),
+                      ),
+                    );
+                  },
         onStoryTap: (story) {
           final isMyStory = provider.currentUserStories.any((s) => s.id == story.id);
           List<StoryModel> allStories;
@@ -246,7 +273,7 @@ class _StoriesSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PublicProfileScreen(userId: userId),
+                        builder: (_) => PublicProfileScreen(userId: userId, currentUserId: provider.userId),
                       ),
                     );
                   },
@@ -718,4 +745,45 @@ Widget _lazyWidget(
     );
   }
   return builder();
+}
+
+class _NotificationBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
+    return Stack(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          child: const Icon(Icons.notifications_outlined,
+              color: Colors.grey, size: 24),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: 2,
+            right: 2,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                unreadCount > 9 ? '9+' : '$unreadCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

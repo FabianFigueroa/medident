@@ -3,7 +3,6 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
 import 'package:medident/screens/widgets/scrolls/stories-scroll-widget.dart';
 import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
 import 'package:medident/screens/role/dentist/widget/post_one_widget.dart';
@@ -131,7 +130,7 @@ class _DentistHomeDesktopState extends State<DentistHomeDesktop> {
                     Text(
                       provider.currentUserName.isNotEmpty
                           ? provider.currentUserName
-                          : 'Dra. Ana García',
+                          : 'Dentista',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -164,7 +163,7 @@ class _DentistHomeDesktopState extends State<DentistHomeDesktop> {
                     controller: _scrollController,
                     slivers: [
                       SliverToBoxAdapter(
-                        child: Appbar_Container_Widget(
+                        child: Appbar_Center_Widget(
                           title: 'Inicio',
                           leftIcon: HugeIcon(
                             icon: HugeIcons.strokeRoundedMenu01,
@@ -238,12 +237,30 @@ class _DentistHomeDesktopState extends State<DentistHomeDesktop> {
                           userId: provider.userId.isNotEmpty
                               ? provider.userId
                               : 'user_dentist_1',
-                          userName: 'Dra. Ana García',
+                          userName: provider.currentUserName.isNotEmpty ? provider.currentUserName : 'Dentista',
                           userPhoto: '',
                           onPublished: () => provider.refreshAll(),
                         ),
                       ),
-                      if (provider.isLoading)
+                      if (provider.loadError != null)
+                        SliverFillRemaining(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                const SizedBox(height: 16),
+                                Text('Error: ${provider.loadError}', textAlign: TextAlign.center),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () => provider.refreshAll(),
+                                  child: const Text('Reintentar'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (provider.isLoading)
                         SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => _buildDesktopShimmer(),

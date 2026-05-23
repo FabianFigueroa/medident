@@ -2,9 +2,9 @@
 import 'package:provider/provider.dart';
 import '../providers/network/network-provider.dart';
 
-class NetworkBannerUtils extends StatelessWidget {
+class NetworkBanner_Utils extends StatelessWidget {
   //
-  const NetworkBannerUtils({super.key});
+  const NetworkBanner_Utils({super.key});
   //
   @override
   Widget build(BuildContext context) {

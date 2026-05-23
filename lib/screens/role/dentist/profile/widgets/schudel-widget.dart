@@ -14,6 +14,7 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
+  final AgendaService _agendaService = AgendaService();
   DateTime _selectedDate = DateTime.now();
 
   bool _isLoading = true;
@@ -58,8 +59,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
-    final fs = FirebaseFirestore.instance;
-    final usersSnap = await fs.collection('users').limit(50).get();
+    final usersSnap = await _agendaService.getUsers(limit: 50);
 
     final allUsers = usersSnap.docs.map((doc) {
       final data = doc.data();
@@ -91,16 +91,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
-    final fs = FirebaseFirestore.instance;
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    final snap = await fs
-        .collection('appointments')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .where('date', isLessThan: Timestamp.fromDate(endOfDay))
-        .limit(50)
-        .get();
+    final snap = await _agendaService.getAppointmentsByDateRange(
+      start: startOfDay,
+      end: endOfDay,
+      limit: 50,
+    );
 
     final mapped = snap.docs.map((doc) {
       final d = doc.data();

@@ -1,7 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:medident/main_export.dart';
 import 'widgets/rfid/rfid-readers-config.dart';
 import 'widgets/rfid/rfid-logs-list.dart';

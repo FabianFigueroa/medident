@@ -1,10 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:medident/main_export.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/admin/admin-main-provider.dart';
-import 'package:medident/core/providers/admin/admin-home-provider.dart';
-import 'package:medident/core/providers/authgate/authenticate-provider.dart';
+import 'package:medident/main_export.dart';
 import 'package:medident/core/models/product-model.dart';
 import 'package:medident/screens/widgets/carousel/promotions-carousel-widget.dart';
 import 'package:medident/screens/widgets/creator/creator-hub-widget.dart';
@@ -124,6 +120,14 @@ class _Header extends StatelessWidget {
                 ],
               ),
               const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                ),
+                child: _AdminNotificationBadge(),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -393,7 +397,6 @@ class _PromotionsSection extends StatelessWidget {
                     'isActive': true,
                     'isFeatured': false,
                     'imageUrls': [],
-                    'createdAt': FieldValue.serverTimestamp(),
                   });
                   Navigator.pop(ctx);
                   if (context.mounted) {
@@ -587,7 +590,6 @@ class _ReelsSection extends StatelessWidget {
                     'userId': provider.userId,
                     'description': descCtrl.text.trim(),
                     'videoUrl': urlCtrl.text.trim(),
-                    'createdAt': FieldValue.serverTimestamp(),
                   });
                   Navigator.pop(ctx);
                   if (context.mounted) {
@@ -612,6 +614,50 @@ class _ReelsSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AdminNotificationBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Stack(
+        children: [
+          const Icon(Icons.notifications, color: Colors.white, size: 22),
+          if (unreadCount > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

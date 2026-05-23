@@ -89,6 +89,7 @@ class AdminHomeService {
   }
 
   Future<void> createGlobalPromotion(Map<String, dynamic> data) async {
+    data['createdAt'] = FieldValue.serverTimestamp();
     await _firestore.collection('promotions').add(data);
   }
 
@@ -114,6 +115,7 @@ class AdminHomeService {
   }
 
   Future<void> createReel(Map<String, dynamic> data) async {
+    data['createdAt'] = FieldValue.serverTimestamp();
     await _firestore.collection('reels').add(data);
   }
 

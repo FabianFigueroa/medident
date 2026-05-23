@@ -1,9 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/admin/admin-main-provider.dart';
-import 'package:medident/core/providers/admin/admin-home-provider.dart';
-import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
 
 class AdminHomeTabletWidget extends StatelessWidget {

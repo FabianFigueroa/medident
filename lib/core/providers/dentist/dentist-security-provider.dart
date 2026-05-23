@@ -1,6 +1,8 @@
 ﻿import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:medident/core/models/contract-request-model.dart';
 import 'package:medident/core/models/rfid-reader-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-rfid-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-sensor-model.dart';
@@ -486,7 +488,14 @@ _securityDataSubscription = _securityService
     }
   }
 
-  Future<void> acceptContract() async {
+  Future<void> acceptContract({
+    required DateTime installationDate,
+    required TimeOfDay installationTime,
+    String? dentistName,
+    String? dentistEmail,
+    String? dentistPhone,
+    String? signatureBase64,
+  }) async {
     debugPrint(
       '[DentistSecurityProvider.acceptContract] Aceptando contrato para userId: $uid',
     );
@@ -494,23 +503,39 @@ _securityDataSubscription = _securityService
     _error = null;
     notifyListeners();
     try {
-      final bool docExists = await _securityService.doesSecurityDocumentExist(
-        uid,
-      );
-
+      final bool docExists = await _securityService.doesSecurityDocumentExist(uid);
       if (!docExists) {
         await _securityService.createInitialContract(uid);
       }
 
-      await _securityService.updateContractStatus(uid, 'active');
+      final request = ContractRequestModel(
+        userId: uid,
+        dentistName: dentistName ?? '',
+        dentistEmail: dentistEmail ?? '',
+        dentistPhone: dentistPhone,
+        installationDate: installationDate,
+        installationTime: installationTime,
+        signatureBase64: signatureBase64,
+        status: ContractRequestStatus.pending_review,
+      );
+
+      await _securityService.submitContractForReview(uid, request);
+
+      debugPrint('[DentistSecurityProvider.acceptContract] Solicitud enviada a revisión');
     } catch (e, stackTrace) {
-      _error = "Error al aceptar el contrato: $e";
+      _error = "Error al enviar solicitud: $e";
       debugPrint("[DentistSecurityProvider.acceptContract] ❌ Error: $e");
       debugPrint("[DentistSecurityProvider.acceptContract] Stack: $stackTrace");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  ContractRequestStatus? get contractRequestStatus {
+    final status = _dentistSecurityModel?.contractStatus;
+    if (status == null) return null;
+    return ContractRequestStatus.values.where((s) => s.name == status).firstOrNull;
   }
 
   // --- MÉTODOS PARA GESTIÓN DE TARJETAS RFID ---
@@ -690,6 +715,10 @@ _securityDataSubscription = _securityService
     } catch (e) {
       _error = e.toString();
     }
+  }
+
+  Stream<QuerySnapshot> streamEmployeesByClinic(String clinicId) {
+    return _securityService.streamEmployeesByClinic(clinicId);
   }
 
   @override

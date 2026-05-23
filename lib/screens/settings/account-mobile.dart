@@ -67,7 +67,7 @@ class _AccountScreenMobileState extends State<AccountScreenMobile> {
       backgroundColor: Colors.white,
       appBar: PreferredSize(
       preferredSize: const Size.fromHeight(56),
-      child: Appbar_Container_Widget(
+      child: Appbar_Center_Widget(
         leftIcon: HugeIcon(icon: HugeIcons.strokeRounded0Circle, size: 24),
         rightIcon: HugeIcon(icon: HugeIcons.strokeRounded1Square, size: 20),
         title: "Mi Título",
@@ -497,7 +497,7 @@ class LogoutButton extends StatelessWidget {
       builder: (BuildContext context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
           ),
           title: const Text(
             'Log Out',

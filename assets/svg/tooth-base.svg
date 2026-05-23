@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 56">
+  <defs>
+    <linearGradient id="toothGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F5F5F5"/>
+    </linearGradient>
+    <linearGradient id="rootGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FAFAFA"/>
+      <stop offset="100%" stop-color="#F0F0F0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sombra -->
+  <path d="M8,52 L8,28 C8,12 16,6 24,8 C32,6 40,12 40,28 L40,52 C40,54 38,56 36,56 L12,56 C10,56 8,54 8,52 Z"
+        fill="rgba(0,0,0,0.06)" transform="translate(1,1)"/>
+
+  <!-- Silueta principal del diente superior con dos raíces -->
+  <path d="M6,50
+           L6,26
+           C6,10 14,2 24,6
+           C34,2 42,10 42,26
+           L42,50
+           C42,54 40,56 36,56
+           L12,56
+           C8,56 6,54 6,50 Z"
+        fill="url(#toothGrad)" stroke="#BDBDBD" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- Línea de furcación entre raíces -->
+  <path d="M18,24 Q22,20 24,22 Q26,20 30,24"
+        fill="none" stroke="#D0D0D0" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Línea cervical (cuello del diente) -->
+  <path d="M8,30 Q24,26 40,30"
+        fill="none" stroke="#D6D6D6" stroke-width="1" stroke-linecap="round"/>
+
+  <!-- Líneas de textura en la corona -->
+  <line x1="10" y1="42" x2="38" y2="42" stroke="#E8E8E8" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="12" y1="46" x2="36" y2="46" stroke="#E8E8E8" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="14" y1="50" x2="34" y2="50" stroke="#E8E8E8" stroke-width="0.8" stroke-linecap="round"/>
+
+  <!-- Raíz mesial (izquierda) -->
+  <path d="M16,8 C14,2 8,0 8,4 C8,8 12,12 16,14"
+        fill="url(#rootGrad)" stroke="#C0C0C0" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Raíz distal (derecha) -->
+  <path d="M32,8 C34,2 40,0 40,4 C40,8 36,12 32,14"
+        fill="url(#rootGrad)" stroke="#C0C0C0" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+</svg>

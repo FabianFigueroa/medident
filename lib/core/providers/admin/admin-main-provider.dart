@@ -5,6 +5,7 @@ import 'package:medident/core/providers/admin/admin-security-provider.dart';
 import 'package:medident/core/providers/admin/admin-delivery-provider.dart';
 import 'package:medident/core/providers/admin/admin-profile-provider.dart';
 import 'package:medident/core/providers/admin/admin-shops-provider.dart';
+import 'package:medident/core/providers/admin/admin-contract-provider.dart';
 import 'package:medident/core/services/admin/admin-home-service.dart';
 import 'package:medident/core/services/admin/admin-security-service.dart';
 import 'package:medident/core/services/admin/admin-delivery-service.dart';
@@ -32,13 +33,15 @@ class AdminMainProvider extends MainProviderBase {
       getTypedProvider<AdminProfileProvider>('profile');
   AdminShopsProvider? get shopsProvider =>
       getTypedProvider<AdminShopsProvider>('shops');
+  AdminContractProvider? get contractProvider =>
+      getTypedProvider<AdminContractProvider>('contract');
 
   @override
   Future<ChangeNotifier> createSectionProvider(String section) async {
     switch (section) {
       case 'home':
         final provider = AdminHomeProvider(userId: userId, service: _homeService);
-        provider.loadInitialData();
+        await provider.loadInitialData();
         return provider;
 
       case 'security':
@@ -59,6 +62,11 @@ class AdminMainProvider extends MainProviderBase {
       case 'shops':
         final provider = AdminShopsProvider(userId: userId, service: _shopsService);
         await provider.loadInitialData();
+        return provider;
+
+      case 'contract':
+        final provider = AdminContractProvider(userId: userId);
+        provider.startListening();
         return provider;
 
       default:

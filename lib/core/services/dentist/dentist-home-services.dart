@@ -632,26 +632,63 @@ class DentistHomeService {
 
   Future<void> followUser(String followerId, String followingId) async {
     if (followerId == followingId) return;
-    final batch = _firestore.batch();
     final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
-    batch.set(followRef, {
+    final existing = await followRef.get();
+    if (existing.exists) {
+      final status = existing.data()?['status'] ?? 'accepted';
+      if (status == 'accepted' || status == 'pending') return;
+    }
+    await followRef.set({
       'followerId': followerId,
       'followingId': followingId,
+      'status': 'pending',
       'createdAt': Timestamp.now(),
     });
+    await _firestore.collection('notifications').add({
+      'userId': followingId,
+      'type': 'follow_request',
+      'fromUserId': followerId,
+      'fromUserName': followerId,
+      'title': 'Solicitud de seguimiento',
+      'body': 'Quiere seguirte',
+      'data': {'status': 'pending'},
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> unfollowUser(String followerId, String followingId) async {
+    if (followerId == followingId) return;
+    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
+    await followRef.delete();
+  }
+
+  Future<void> acceptFollowRequest(String followerId, String followingId) async {
+    final batch = _firestore.batch();
+    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
+    batch.update(followRef, {'status': 'accepted'});
     batch.update(_firestore.collection('users').doc(followerId), {'followingCount': FieldValue.increment(1)});
     batch.update(_firestore.collection('users').doc(followingId), {'followersCount': FieldValue.increment(1)});
     await batch.commit();
   }
 
-  Future<void> unfollowUser(String followerId, String followingId) async {
-    if (followerId == followingId) return;
-    final batch = _firestore.batch();
-    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
-    batch.delete(followRef);
-    batch.update(_firestore.collection('users').doc(followerId), {'followingCount': FieldValue.increment(-1)});
-    batch.update(_firestore.collection('users').doc(followingId), {'followersCount': FieldValue.increment(-1)});
-    await batch.commit();
+  Future<void> rejectFollowRequest(String followerId, String followingId) async {
+    await _firestore.collection('follows').doc('${followerId}_$followingId').delete();
+  }
+
+  Future<String> checkFollowStatus(String currentUserId, String targetUserId) async {
+    final doc = await _firestore.collection('follows').doc('${currentUserId}_$targetUserId').get();
+    if (!doc.exists) return 'none';
+    return doc.data()?['status'] ?? 'accepted';
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingFollowRequests(String userId) async {
+    final query = await _firestore
+        .collection('follows')
+        .where('followingId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .get();
+    return query.docs.map((doc) => doc.data()).toList();
   }
 
   Future<void> blockUser(String blockerId, String blockedId) async {

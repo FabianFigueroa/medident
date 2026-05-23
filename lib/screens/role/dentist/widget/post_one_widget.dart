@@ -111,7 +111,7 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
         child: SafeArea(
           child: Column(
@@ -214,7 +214,7 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         title: const Text('Reportar contenido'),
         content: const Text('¿Por qué quieres reportar este contenido?'),
@@ -251,7 +251,7 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         title: const Text('Eliminar post'),
         content: const Text('¿Estás seguro de eliminar este post? Esta acción no se puede deshacer.'),

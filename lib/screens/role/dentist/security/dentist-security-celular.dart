@@ -1,11 +1,14 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
+import 'package:hugeicons/hugeicons.dart';
+import 'package:medident/main_export.dart';
 import 'package:medident/core/utils/app-constant.dart';
 import 'package:medident/core/utils/app-textstyle.dart';
-import 'package:medident/main_export.dart';
-import 'package:medident/screens/role/dentist/security/widgets/dentist-info-section.dart' hide Device;
+import 'package:medident/screens/role/dentist/security/widgets/dentist-security-stats.dart';
+import 'package:medident/screens/role/dentist/security/widgets/dentist-security-settings.dart';
+import 'package:medident/screens/role/dentist/security/widgets/dentist-security-alerts.dart';
 import 'package:provider/provider.dart';
+import 'package:medident/screens/role/dentist/security/widgets/dentist-info-section.dart' hide Device;
 import 'dart:typed_data';
 
 class DentistSecurityCelular extends StatelessWidget {
@@ -783,10 +786,7 @@ class DentistSecurityCelular extends StatelessWidget {
                 const Spacer(),
                 if (clinicId.isNotEmpty)
                   StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .where('clinicId', isEqualTo: clinicId)
-                        .snapshots(),
+                    stream: context.read<DentistSecurityProvider>().streamEmployeesByClinic(clinicId),
                     builder: (context, snap) {
                       if (!snap.hasData) return const SizedBox.shrink();
                       final total = snap.data!.docs.length;
@@ -823,10 +823,7 @@ class DentistSecurityCelular extends StatelessWidget {
               )
             else
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .where('clinicId', isEqualTo: clinicId)
-                    .snapshots(),
+                stream: context.read<DentistSecurityProvider>().streamEmployeesByClinic(clinicId),
                 builder: (context, snap) {
                   if (!snap.hasData) {
                     return const SizedBox(

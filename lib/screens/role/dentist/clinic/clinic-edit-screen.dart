@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/main_export.dart';
 
 class ClinicEditScreen extends StatefulWidget {
@@ -29,7 +28,13 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
     '#8E8E93', '#1C1C1E',
   ];
 
-  ClinicModel? _getClinic() => context.read<DentistMainProvider>().clinicStatusProvider?.clinic;
+  ClinicModel? _getClinic() {
+    try {
+      return context.read<DentistMainProvider>().clinicStatusProvider?.clinic;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -44,6 +49,7 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
     if (clinic?.primaryColor != null) {
       _selectedColor = clinic!.primaryColor!;
     }
+    context.read<DentistMainProvider>().clinicStatusProvider?.loadTreatments();
   }
 
   @override
@@ -65,16 +71,18 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
     if (clinic == null) return;
     setState(() => _loading = true);
     try {
-      await FirebaseFirestore.instance.collection('clinics').doc(clinic.id).update({
-        'name': _nameCtrl.text.trim(),
-        'address': _addressCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'website': _websiteCtrl.text.trim(),
-        'description': _descriptionCtrl.text.trim(),
-        'primaryColor': _selectedColor,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      final clinicProvider = context.read<DentistMainProvider>().clinicStatusProvider;
+      if (clinicProvider != null) {
+        await clinicProvider.updateClinic({
+          'name': _nameCtrl.text.trim(),
+          'address': _addressCtrl.text.trim(),
+          'phone': _phoneCtrl.text.trim(),
+          'email': _emailCtrl.text.trim(),
+          'website': _websiteCtrl.text.trim(),
+          'description': _descriptionCtrl.text.trim(),
+          'primaryColor': _selectedColor,
+        });
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Clínica actualizada'), backgroundColor: Colors.green),
@@ -246,6 +254,8 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
 
   Widget _buildServicesSection() {
     final clinic = _getClinic();
+    final clinicProvider = context.watch<DentistMainProvider>().clinicStatusProvider;
+    final treatments = clinicProvider?.treatments ?? [];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -255,35 +265,24 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
         children: [
           const Text('Servicios', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1C1C1E))),
           const SizedBox(height: 12),
-          if (clinic != null)
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('treatments')
-                  .where('clinicId', isEqualTo: clinic.id)
-                  .where('isActive', isEqualTo: true)
-                  .snapshots(),
-              builder: (context, snap) {
-                if (!snap.hasData) return const SizedBox.shrink();
-                final docs = snap.data!.docs;
-                return Column(
-                  children: [
-                    ...docs.map((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(data['name'] ?? 'Servicio', style: const TextStyle(fontSize: 14)),
-                        subtitle: Text('\$${(data['price'] as num?)?.toStringAsFixed(0) ?? '0'} · ${data['durationMinutes'] ?? 30} min',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.red[300]),
-                          onPressed: () => FirebaseFirestore.instance.collection('treatments').doc(d.id).update({'isActive': false}),
-                        ),
-                      );
-                    }),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Row(
+          if (clinic != null) ...[
+            ...treatments.map((t) {
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.name, style: const TextStyle(fontSize: 14)),
+                subtitle: Text('\$${t.price.toStringAsFixed(0)} · ${t.durationMinutes} min',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete_outline, size: 18, color: Colors.red[300]),
+                  onPressed: () => clinicProvider?.deactivateTreatment(t.id),
+                ),
+              );
+            }),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
                         children: [
                           Expanded(
                             child: TextField(
@@ -344,27 +343,21 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
                       ),
                     ),
                   ],
-                );
-              },
-            ),
         ],
       ),
     );
   }
 
   Future<void> _addService() async {
-    final clinic = _getClinic();
-    if (clinic == null || _serviceNameCtrl.text.trim().isEmpty) return;
+    if (_serviceNameCtrl.text.trim().isEmpty) return;
     final price = double.tryParse(_servicePriceCtrl.text.trim()) ?? 0;
     final duration = int.tryParse(_serviceDurationCtrl.text.trim()) ?? 30;
-    await FirebaseFirestore.instance.collection('treatments').add({
-      'clinicId': clinic.id,
-      'name': _serviceNameCtrl.text.trim(),
-      'price': price,
-      'durationMinutes': duration,
-      'isActive': true,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final clinicProvider = context.read<DentistMainProvider>().clinicStatusProvider;
+    await clinicProvider?.addTreatment(
+      name: _serviceNameCtrl.text.trim(),
+      price: price,
+      durationMinutes: duration,
+    );
     _serviceNameCtrl.clear();
     _servicePriceCtrl.clear();
     _serviceDurationCtrl.clear();
@@ -409,9 +402,9 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final clinic = _getClinic();
-              if (clinic != null) {
-                await FirebaseFirestore.instance.collection('clinics').doc(clinic.id).update({'isActive': false});
+              final clinicProvider = context.read<DentistMainProvider>().clinicStatusProvider;
+              if (clinicProvider != null) {
+                await clinicProvider.deactivateClinic();
                 if (mounted) Navigator.pop(context);
               }
             },

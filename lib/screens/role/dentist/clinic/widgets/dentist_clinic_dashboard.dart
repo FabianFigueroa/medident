@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:medident/core/models/product-model.dart';
 import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/models/user-model.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/domain/agenda-provider.dart';
@@ -45,10 +45,10 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
 
   @override
   Widget build(BuildContext context) {
-    final clinicId = context.select<ClinicProvider, String>((p) => p.clinic?.id ?? '');
-    final clinicPromos = context.select<ClinicProvider, List<ProductModel>>((p) => p.promotions);
-    final clinicTreatments = context.select<ClinicProvider, List<TreatmentModel>>((p) => p.treatments);
-    final isOwner = context.select<ClinicProvider, bool>((p) => p.isOwner);
+    final clinicId = context.select<DentistClinicProvider, String>((p) => p.clinic?.id ?? '');
+    final clinicPromos = context.select<DentistClinicProvider, List<ProductModel>>((p) => p.promotions);
+    final clinicTreatments = context.select<DentistClinicProvider, List<TreatmentModel>>((p) => p.treatments);
+    final isOwner = context.select<DentistClinicProvider, bool>((p) => p.isOwner);
     final user = context.select<AuthenticateProvider, UserModel?>((p) => p.user);
 
     if (clinicId.isNotEmpty && _lastClinicId != clinicId) {
@@ -141,7 +141,7 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
               pinned: true,
               elevation: 0,
               scrolledUnderElevation: 0.5,
-              backgroundColor: context.watch<ClinicProvider>().primaryColor,
+              backgroundColor: context.watch<DentistClinicProvider>().primaryColor,
               automaticallyImplyLeading: false,
               flexibleSpace: FlexibleSpaceBar(
                 background: user != null
@@ -168,9 +168,9 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
                   color: Colors.white,
                     child: TabBar(
                     controller: _tabController,
-                    indicatorColor: context.watch<ClinicProvider>().primaryColor,
+                    indicatorColor: context.watch<DentistClinicProvider>().primaryColor,
                     indicatorWeight: 2.5,
-                    labelColor: context.watch<ClinicProvider>().primaryColor,
+                    labelColor: context.watch<DentistClinicProvider>().primaryColor,
                     unselectedLabelColor: Colors.grey[400],
                     labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                     tabs: const [
@@ -193,12 +193,12 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
           ],
           child: TabBarView(
             controller: _tabController,
-            children: const [
-              ClinicFeedTab(),
-              AgendaTab_Screen(),
-              ClinicTurnosTab(),
-              ClinicHistorialTab(),
-              ClinicPostsTab(),
+            children: [
+              ClinicFeedTab(clinicId: clinicId),
+              AgendaTab_Screen(clinicId: clinicId),
+              const ClinicTurnosTab(),
+              const ClinicHistorialTab(),
+              const ClinicPostsTab(),
             ],
           ),
         ),

@@ -1,19 +1,27 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+typedef NotificationTapCallback = void Function(Map<String, dynamic> data);
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static FlutterLocalNotificationsPlugin? _localNotifications;
   static String? _currentUserId;
   static bool _initialized = false;
+  static NotificationTapCallback? _onTapCallback;
 
   static void init() {
     if (_initialized) return;
     _initialized = true;
     _initAsync();
+  }
+
+  static void setOnTapCallback(NotificationTapCallback callback) {
+    _onTapCallback = callback;
   }
 
   static Future<void> _initAsync() async {
@@ -106,16 +114,17 @@ class NotificationService {
     try {
       final title = message.notification?.title ?? 'Medident';
       final body = message.notification?.body ?? '';
-      const androidDetails = AndroidNotificationDetails(
-        'delivery_channel',
-        'Entregas',
-        channelDescription: 'Notificaciones de estado de entregas',
+      final channelId = _resolveChannel(message.data);
+      final androidDetails = AndroidNotificationDetails(
+        channelId,
+        _channelName(channelId),
+        channelDescription: _channelDescription(channelId),
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
       );
       const iosDetails = DarwinNotificationDetails();
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -129,14 +138,69 @@ class NotificationService {
     } catch (_) {}
   }
 
+  static String _resolveChannel(Map<String, dynamic> data) {
+    final type = data['type'] as String? ?? '';
+    if (type == 'appointment' || type == 'appointment_reminder') return 'appointments_channel';
+    if (type == 'delivery_status' || type == 'new_order') return 'delivery_channel';
+    if (type == 'security' || type == 'rfid_alert') return 'security_channel';
+    return 'general_channel';
+  }
+
+  static String _channelName(String channel) {
+    switch (channel) {
+      case 'appointments_channel': return 'Citas';
+      case 'delivery_channel': return 'Entregas';
+      case 'security_channel': return 'Seguridad';
+      default: return 'General';
+    }
+  }
+
+  static String _channelDescription(String channel) {
+    switch (channel) {
+      case 'appointments_channel': return 'Notificaciones de citas y agenda';
+      case 'delivery_channel': return 'Notificaciones de estado de entregas';
+      case 'security_channel': return 'Alertas de seguridad';
+      default: return 'Notificaciones generales';
+    }
+  }
+
   @pragma('vm:entry-point')
-  static Future<void> _onBackgroundMessage(RemoteMessage message) async {}
+  static Future<void> _onBackgroundMessage(RemoteMessage message) async {
+    try {
+      final data = message.data;
+      if (data.isNotEmpty && _currentUserId != null) {
+        await _saveNotificationToFirestore(data);
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _saveNotificationToFirestore(Map<String, dynamic> data) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': _currentUserId,
+        'type': data['type'] ?? 'system',
+        'title': data['title'] ?? 'Medident',
+        'body': data['body'] ?? '',
+        'data': data,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
 
   static Future<void> _onNotificationTap(RemoteMessage message) async {
     _handleNotificationTap(message.data.toString());
   }
 
-  static void _handleNotificationTap(String? payload) {}
+  static void _handleNotificationTap(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final Map<String, dynamic> data = Map<String, dynamic>.from(
+        const JsonDecoder().convert(payload),
+      );
+      _onTapCallback?.call(data);
+    } catch (_) {}
+  }
 
   static Future<void> deleteToken() async {
     try {

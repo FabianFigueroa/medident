@@ -1,12 +1,14 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DoctorHomeMobile extends StatefulWidget {
-  const DoctorHomeMobile({super.key});
+  final String userId;
+
+  const DoctorHomeMobile({super.key, required this.userId});
 
   @override
   State<DoctorHomeMobile> createState() => _DoctorHomeMobileState();
@@ -14,64 +16,6 @@ class DoctorHomeMobile extends StatefulWidget {
 
 class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
   final ScrollController _scrollController = ScrollController();
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _appointments = [];
-  List<Map<String, dynamic>> _patients = [];
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final user = context.read<AuthenticateProvider>().user;
-      if (user == null) {
-        setState(() {
-          _error = 'No se encontró sesión activa';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final fs = FirebaseFirestore.instance;
-
-      final results = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        fs.collection('appointments')
-            .where('dentistId', isEqualTo: user.uid)
-            .where('status', whereIn: ['pending', 'confirmed'])
-            .orderBy('date')
-            .limit(5)
-            .get(),
-        fs.collection('users')
-            .where('role', isEqualTo: 'patient')
-            .limit(10)
-            .get(),
-      ]);
-
-      setState(() {
-        _appointments = results[0].docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
-        _patients = results[1].docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Error al cargar datos: $e';
-        _isLoading = false;
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -81,27 +25,39 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthenticateProvider>().user;
-    final doctorName = user?.fullName ?? 'Doctor';
+    final provider = context.watch<DoctorHomeProvider>();
+    final data = provider.dashboardData;
+    final isLoading = provider.isLoading;
+    final error = provider.error;
+
+    final appointments = (data['appointments'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final patients = (data['patients'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final doctorName = data['fullName'] as String? ?? 'Doctor';
+    final globalPromotions = provider.globalPromotions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => context.read<DoctorHomeProvider>().loadInitialData(),
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
             _buildAppBar(doctorName),
             _buildQuickActions(),
-            _buildTodayStats(),
-            if (_isLoading) ...[
+            _buildGlobalPromotions(globalPromotions),
+            _buildTodayStats(appointments),
+            if (isLoading) ...[
               _buildShimmerSection(),
               _buildShimmerSection(),
-            ] else if (_error != null)
-              _buildErrorSection()
+            ] else if (error != null)
+              _buildErrorSection(error)
             else ...[
-              _buildAppointmentsSection(),
-              _buildRecentPatients(),
+              _buildAppointmentsSection(appointments),
+              _buildRecentPatients(patients),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ],
@@ -115,7 +71,8 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
         decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
+          gradient:
+              LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -123,14 +80,22 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Bienvenido,', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                Text('Dr(a). $doctorName', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                const Text('Bienvenido,',
+                    style: TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Dr(a). $doctorName',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.notifications, color: Colors.white, size: 24),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationScreen()),
+              ),
+              child: _NotificationBadge(),
             ),
           ],
         ),
@@ -151,25 +116,29 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
           childAspectRatio: 0.85,
           children: [
             _quickActionCard(
-              iconWidget: const Icon(Icons.calendar_today, color: Color(0xFF1565C0), size: 24),
+              iconWidget:
+                  const Icon(Icons.calendar_today, color: Color(0xFF1565C0), size: 24),
               label: 'Agenda',
               color: const Color(0xFF1565C0),
               onTap: () {},
             ),
             _quickActionCard(
-              iconWidget: const Icon(Icons.people, color: Color(0xFF42A5F5), size: 24),
+              iconWidget:
+                  const Icon(Icons.people, color: Color(0xFF42A5F5), size: 24),
               label: 'Pacientes',
               color: const Color(0xFF42A5F5),
               onTap: () {},
             ),
             _quickActionCard(
-              iconWidget: const Icon(Icons.history, color: Color(0xFF1976D2), size: 24),
+              iconWidget:
+                  const Icon(Icons.history, color: Color(0xFF1976D2), size: 24),
               label: 'Historial',
               color: const Color(0xFF1976D2),
               onTap: () {},
             ),
             _quickActionCard(
-              iconWidget: const Icon(Icons.videocam, color: Color(0xFF0D47A1), size: 24),
+              iconWidget:
+                  const Icon(Icons.videocam, color: Color(0xFF0D47A1), size: 24),
               label: 'Telemedicina',
               color: const Color(0xFF0D47A1),
               onTap: () {},
@@ -198,31 +167,52 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12)),
               child: iconWidget,
             ),
             const SizedBox(height: 6),
-            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
+            Text(label,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTodayStats() {
+  Widget _buildTodayStats(List<Map<String, dynamic>> appointments) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            _statCard(iconWidget: const Icon(Icons.people, color: Color(0xFF1565C0), size: 20),
-                label: 'Pacientes Hoy', value: _appointments.length.toString(), color: const Color(0xFF1565C0)),
+            _statCard(
+                iconWidget:
+                    const Icon(Icons.people, color: Color(0xFF1565C0), size: 20),
+                label: 'Pacientes Hoy',
+                value: appointments.length.toString(),
+                color: const Color(0xFF1565C0)),
             const SizedBox(width: 12),
-            _statCard(iconWidget: const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                label: 'Completadas', value: _appointments.where((a) => a['status'] == 'completed').length.toString(), color: Colors.green),
+            _statCard(
+                iconWidget:
+                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                label: 'Completadas',
+                value: appointments
+                    .where((a) => a['status'] == 'completed')
+                    .length
+                    .toString(),
+                color: Colors.green),
             const SizedBox(width: 12),
-            _statCard(iconWidget: const Icon(Icons.schedule, color: Colors.orange, size: 20),
-                label: 'Pendientes', value: _appointments.where((a) => a['status'] == 'pending').length.toString(), color: Colors.orange),
+            _statCard(
+                iconWidget: const Icon(Icons.schedule, color: Colors.orange, size: 20),
+                label: 'Pendientes',
+                value: appointments
+                    .where((a) => a['status'] == 'pending')
+                    .length
+                    .toString(),
+                color: Colors.orange),
           ],
         ),
       ),
@@ -244,8 +234,12 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
             children: [
               iconWidget,
               const SizedBox(height: 6),
-              Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-              Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey), textAlign: TextAlign.center),
+              Text(value,
+                  style:
+                      TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+              Text(label,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -253,7 +247,7 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     );
   }
 
-  Widget _buildAppointmentsSection() {
+  Widget _buildAppointmentsSection(List<Map<String, dynamic>> appointments) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -263,12 +257,13 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Citas de Hoy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Citas de Hoy',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 TextButton(onPressed: () {}, child: const Text('Ver todas')),
               ],
             ),
             const SizedBox(height: 12),
-            if (_appointments.isEmpty)
+            if (appointments.isEmpty)
               Card(
                 color: Colors.white,
                 child: Padding(
@@ -277,13 +272,15 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
                     children: [
                       const Icon(Icons.calendar_today, color: Colors.grey, size: 48),
                       const SizedBox(height: 12),
-                      const Text('No hay citas para hoy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                      const Text('No hay citas para hoy',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
               )
             else
-              ..._appointments.map((apt) => _appointmentCard(apt)).toList(),
+              ...appointments.map((apt) => _appointmentCard(apt)).toList(),
           ],
         ),
       ),
@@ -295,10 +292,17 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     final status = apt['status'] ?? 'pending';
     Color statusColor;
     switch (status) {
-      case 'confirmed': statusColor = Colors.green; break;
-      case 'completed': statusColor = Colors.blue; break;
-      case 'cancelled': statusColor = Colors.red; break;
-      default: statusColor = Colors.orange;
+      case 'confirmed':
+        statusColor = Colors.green;
+        break;
+      case 'completed':
+        statusColor = Colors.blue;
+        break;
+      case 'cancelled':
+        statusColor = Colors.red;
+        break;
+      default:
+        statusColor = Colors.orange;
     }
 
     return Card(
@@ -308,7 +312,8 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
         leading: CircleAvatar(
           backgroundColor: const Color(0xFF1565C0).withOpacity(0.1),
           child: Text((apt['patientName'] ?? 'P')[0],
-              style: const TextStyle(color: Color(0xFF1565C0), fontWeight: FontWeight.bold)),
+              style: const TextStyle(
+                  color: Color(0xFF1565C0), fontWeight: FontWeight.bold)),
         ),
         title: Text(apt['patientName'] ?? 'Paciente'),
         subtitle: Text(apt['treatmentName'] ?? 'Consulta General'),
@@ -316,15 +321,20 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(date != null
-                ? '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}'
-                : (apt['timeSlot'] ?? ''),
+            Text(
+                date != null
+                    ? '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}'
+                    : (apt['timeSlot'] ?? ''),
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: Text(status, style: TextStyle(color: statusColor, fontSize: 10)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text(status,
+                  style: TextStyle(color: statusColor, fontSize: 10)),
             ),
           ],
         ),
@@ -332,8 +342,8 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     );
   }
 
-  Widget _buildRecentPatients() {
-    if (_patients.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+  Widget _buildRecentPatients(List<Map<String, dynamic>> patients) {
+    if (patients.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -341,15 +351,16 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Pacientes Recientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Pacientes Recientes',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             SizedBox(
               height: 80,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _patients.length,
+                itemCount: patients.length,
                 itemBuilder: (context, index) {
-                  final p = _patients[index];
+                  final p = patients[index];
                   return Container(
                     width: 120,
                     margin: const EdgeInsets.only(right: 12),
@@ -362,14 +373,20 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
                           children: [
                             CircleAvatar(
                               radius: 24,
-                              backgroundColor: const Color(0xFF1565C0).withOpacity(0.1),
+                              backgroundColor:
+                                  const Color(0xFF1565C0).withOpacity(0.1),
                               child: Text((p['fullName'] ?? 'P')[0],
-                                  style: const TextStyle(color: Color(0xFF1565C0), fontWeight: FontWeight.bold, fontSize: 18)),
+                                  style: const TextStyle(
+                                      color: Color(0xFF1565C0),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18)),
                             ),
                             const SizedBox(height: 4),
                             Text(p['fullName'] ?? 'Paciente',
                                 style: const TextStyle(fontSize: 12),
-                                maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center),
                           ],
                         ),
                       ),
@@ -384,19 +401,75 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     );
   }
 
-  Widget _buildShimmerSection() {
+  Widget _buildGlobalPromotions(List<ProductModel> promos) {
+    if (promos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey[300]!, highlightColor: Colors.grey[100]!,
-          child: Container(height: 120, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: promos.length,
+            itemBuilder: (context, index) {
+              final promo = promos[index];
+              return Container(
+                width: 260,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
+                  ),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(promo.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if (promo.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(promo.description,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildErrorSection() {
+  Widget _buildShimmerSection() {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorSection(String error) {
     return SliverFillRemaining(
       hasScrollBody: false,
       child: Center(
@@ -405,11 +478,60 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
           children: [
             const Icon(Icons.error, color: Colors.red, size: 48),
             const SizedBox(height: 16),
-            Text(_error ?? 'Error desconocido', textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+            Text(error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadData, child: const Text('Reintentar')),
+            ElevatedButton(
+              onPressed: () =>
+                  context.read<DoctorHomeProvider>().loadInitialData(),
+              child: const Text('Reintentar'),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12)),
+      child: Stack(
+        children: [
+          const Icon(Icons.notifications, color: Colors.white, size: 24),
+          if (unreadCount > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

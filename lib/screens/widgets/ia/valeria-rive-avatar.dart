@@ -10,6 +10,7 @@ class ValeriaRiveAvatar extends StatefulWidget {
   final ValeriaRiveExpression expression;
   final bool isTyping;
   final String riveAsset;
+  final bool cropToTopHalf;
 
   const ValeriaRiveAvatar({
     super.key,
@@ -17,6 +18,7 @@ class ValeriaRiveAvatar extends StatefulWidget {
     this.expression = ValeriaRiveExpression.idle,
     this.isTyping = false,
     this.riveAsset = 'assets/rive/valeria.riv',
+    this.cropToTopHalf = false,
   });
 
   @override
@@ -148,11 +150,25 @@ class _ValeriaRiveAvatarState extends State<ValeriaRiveAvatar>
     if (!_isLoaded || _artboard == null) {
       return _buildFallback();
     }
-    return SizedBox(
+
+    Widget avatar = SizedBox(
       width: widget.size,
       height: widget.size,
       child: Rive(artboard: _artboard!),
     );
+
+    if (widget.cropToTopHalf) {
+      avatar = ClipRect(
+        clipper: _TopHalfClipper(),
+        child: Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()..scale(1.8, 1.8),
+          child: avatar,
+        ),
+      );
+    }
+
+    return avatar;
   }
 
   Widget _buildFallback() {
@@ -195,6 +211,16 @@ class _ValeriaRiveAvatarState extends State<ValeriaRiveAvatar>
       },
     );
   }
+}
+
+class _TopHalfClipper extends CustomClipper<Rect> {
+  @override
+  Rect getClip(Size size) {
+    return Rect.fromLTWH(0, 0, size.width, size.height / 2);
+  }
+
+  @override
+  bool shouldReclip(_TopHalfClipper oldClipper) => false;
 }
 
 class _FallbackFacePainter extends CustomPainter {

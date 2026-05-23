@@ -110,11 +110,87 @@ class FilterPreset {
     0, 0, 0, 1, 0,
   ]);
 
+  static final vintage = FilterPreset('Vintage', [
+    0.9, 0, 0, 0, 20,
+    0, 0.85, 0, 0, 15,
+    0, 0, 0.75, 0, 25,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final warm = FilterPreset('Warm', [
+    1.15, 0, 0, 0, 8,
+    0, 1.0, 0, 0, 3,
+    0, 0, 0.85, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final cool = FilterPreset('Cool', [
+    0.9, 0, 0, 0, 0,
+    0, 1.0, 0, 0, 2,
+    0, 0, 1.15, 0, 8,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final dramatic = FilterPreset('Dramatic', [
+    1.3, 0, 0, 0, -10,
+    0, 1.2, 0, 0, -8,
+    0, 0, 1.1, 0, -5,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final noir = FilterPreset('Noir', [
+    0.6, 0, 0, 0, 5,
+    0, 0.6, 0, 0, 5,
+    0, 0, 0.6, 0, 5,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final sepia = FilterPreset('Sepia', [
+    0.393, 0.769, 0.189, 0, 10,
+    0.349, 0.686, 0.168, 0, 5,
+    0.272, 0.534, 0.131, 0, 3,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final vibrant = FilterPreset('Vibrant', [
+    1.25, 0, 0, 0, 0,
+    0, 1.15, 0, 0, 0,
+    0, 0, 1.3, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static final faded = FilterPreset('Faded', [
+    1.0, 0, 0, 0, 0,
+    0, 0.95, 0, 0, 0,
+    0, 0, 0.9, 0, 0,
+    0, 0, 0, 0.85, 15,
+  ]);
+
   static final List<FilterPreset> all = [
     original, clarendon, gingham, juno, lark,
     reyes, valencia, amaro, hudson, xpro2,
     lofi, inkwell, willow, nashville,
+    vintage, warm, cool, dramatic, noir,
+    sepia, vibrant, faded,
   ];
+}
+
+class TextOverlay {
+  String text;
+  Color color;
+  double fontSize;
+  Offset position;
+  double rotation;
+  bool isEditing;
+
+  TextOverlay({
+    this.text = 'Texto',
+    this.color = Colors.white,
+    this.fontSize = 24,
+    this.position = const Offset(0, 0),
+    this.rotation = 0,
+    this.isEditing = false,
+  });
 }
 
 class ImageEditorScreen extends StatefulWidget {
@@ -132,21 +208,43 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
   final _repaintKey = GlobalKey();
 
   FilterPreset _selectedFilter = FilterPreset.original;
+  late AnimationController _filterAnimCtrl;
+
   double _brightness = 0;
   double _contrast = 1;
   double _saturation = 1;
+  double _highlights = 0;
+  double _shadows = 0;
+  double _warmth = 0;
+  double _vignette = 0;
   bool _saving = false;
+
+  final List<TextOverlay> _textOverlays = [];
+  final _textController = TextEditingController();
+  Color _textColor = Colors.white;
+  double _textFontSize = 24;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
+    _filterAnimCtrl = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     _tabCtrl.dispose();
+    _filterAnimCtrl.dispose();
+    _textController.dispose();
     super.dispose();
+  }
+
+  void _changeFilter(FilterPreset filter) {
+    if (_selectedFilter.name == filter.name) return;
+    setState(() => _selectedFilter = filter);
   }
 
   List<double> get _combinedMatrix {
@@ -162,10 +260,13 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
 
     final base = _selectedFilter.matrix;
 
+    final h = _highlights * 0.3;
+    final sh = _shadows * 0.2;
+
     return [
-      (base[0] * c * (sr + s)) + (base[1] * c * sr) + (base[2] * c * sr), (base[0] * c * sg) + (base[1] * c * (sg + s)) + (base[2] * c * sg), (base[0] * c * sb) + (base[1] * c * sb) + (base[2] * c * (sb + s)), 0, base[4] * c + brightnessOffset,
-      (base[5] * c * (sr + s)) + (base[6] * c * sr) + (base[7] * c * sr), (base[5] * c * sg) + (base[6] * c * (sg + s)) + (base[7] * c * sg), (base[5] * c * sb) + (base[6] * c * sb) + (base[7] * c * (sb + s)), 0, base[9] * c + brightnessOffset,
-      (base[10] * c * (sr + s)) + (base[11] * c * sr) + (base[12] * c * sr), (base[10] * c * sg) + (base[11] * c * (sg + s)) + (base[12] * c * sg), (base[10] * c * sb) + (base[11] * c * sb) + (base[12] * c * (sb + s)), 0, base[14] * c + brightnessOffset,
+      (base[0] * c * (sr + s + h)) + (base[1] * c * sr) + (base[2] * c * sr), (base[0] * c * sg) + (base[1] * c * (sg + s + h)) + (base[2] * c * sg), (base[0] * c * sb) + (base[1] * c * sb) + (base[2] * c * (sb + s + h)), 0, base[4] * c + brightnessOffset + sh,
+      (base[5] * c * (sr + s + h)) + (base[6] * c * sr) + (base[7] * c * sr), (base[5] * c * sg) + (base[6] * c * (sg + s + h)) + (base[7] * c * sg), (base[5] * c * sb) + (base[6] * c * sb) + (base[7] * c * (sb + s + h)), 0, base[9] * c + brightnessOffset + sh,
+      (base[10] * c * (sr + s + h)) + (base[11] * c * sr) + (base[12] * c * sr), (base[10] * c * sg) + (base[11] * c * (sg + s + h)) + (base[12] * c * sg), (base[10] * c * sb) + (base[11] * c * sb) + (base[12] * c * (sb + s + h)), 0, base[14] * c + brightnessOffset + sh,
       0, 0, 0, 1, 0,
     ];
   }
@@ -210,6 +311,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
     }
   }
 
+  void _removeTextOverlay(int index) {
+    setState(() {
+      _textOverlays.removeAt(index);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,15 +343,38 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
           Expanded(
             child: RepaintBoundary(
               key: _repaintKey,
-              child: Center(
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_combinedMatrix),
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4,
-                    child: Image.memory(widget.imageBytes, fit: BoxFit.contain),
+              child: Stack(
+                children: [
+                  Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: ColorFiltered(
+                        key: ValueKey('${_selectedFilter.name}_${_brightness}_${_contrast}_$_saturation'),
+                        colorFilter: ColorFilter.matrix(_combinedMatrix),
+                        child: InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 4,
+                          child: Image.memory(widget.imageBytes, fit: BoxFit.contain),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  if (_vignette > 0)
+                    IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: _vignette),
+                            ],
+                            radius: 0.75,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ..._buildTextOverlayWidgets(),
+                ],
               ),
             ),
           ),
@@ -258,19 +388,22 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
                   indicatorColor: Colors.white,
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.grey,
+                  isScrollable: true,
                   tabs: const [
                     Tab(text: 'Filtros'),
                     Tab(text: 'Ajustar'),
+                    Tab(text: 'Texto'),
                     Tab(text: 'Recortar'),
                   ],
                 ),
                 SizedBox(
-                  height: 180,
+                  height: 200,
                   child: TabBarView(
                     controller: _tabCtrl,
                     children: [
                       _buildFiltersTab(),
                       _buildAdjustTab(),
+                      _buildTextTab(),
                       _buildCropTab(),
                     ],
                   ),
@@ -281,6 +414,51 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
         ],
       ),
     );
+  }
+
+  List<Widget> _buildTextOverlayWidgets() {
+    return _textOverlays.asMap().entries.map((entry) {
+      final i = entry.key;
+      final overlay = entry.value;
+      return Positioned(
+        left: overlay.position.dx,
+        top: overlay.position.dy,
+        child: GestureDetector(
+          onPanUpdate: (details) {
+            setState(() {
+              _textOverlays[i] = TextOverlay(
+                text: overlay.text,
+                color: overlay.color,
+                fontSize: overlay.fontSize,
+                position: Offset(
+                  overlay.position.dx + details.delta.dx,
+                  overlay.position.dy + details.delta.dy,
+                ),
+                rotation: overlay.rotation,
+              );
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              overlay.text,
+              style: TextStyle(
+                color: overlay.color,
+                fontSize: overlay.fontSize,
+                fontWeight: FontWeight.bold,
+                shadows: const [
+                  Shadow(blurRadius: 4, color: Colors.black54),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildFiltersTab() {
@@ -294,14 +472,16 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
           final f = FilterPreset.all[i];
           final selected = _selectedFilter.name == f.name;
           return GestureDetector(
-            onTap: () => setState(() => _selectedFilter = f),
-            child: Container(
+            onTap: () => _changeFilter(f),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               width: 80,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
@@ -339,15 +519,115 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
   }
 
   Widget _buildAdjustTab() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Column(
         children: [
           _slider('Brillo', _brightness, -0.5, 0.5, (v) => setState(() => _brightness = v)),
-          const SizedBox(height: 8),
           _slider('Contraste', _contrast, 0.5, 1.5, (v) => setState(() => _contrast = v)),
-          const SizedBox(height: 8),
           _slider('Saturación', _saturation, 0, 2, (v) => setState(() => _saturation = v)),
+          _slider('Luces', _highlights, -0.5, 0.5, (v) => setState(() => _highlights = v)),
+          _slider('Sombras', _shadows, -0.5, 0.5, (v) => setState(() => _shadows = v)),
+          _slider('Calidez', _warmth, -0.5, 0.5, (v) => setState(() => _warmth = v)),
+          _slider('Viñeta', _vignette, 0, 0.6, (v) => setState(() => _vignette = v)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          if (_textOverlays.isNotEmpty) ...[
+            Expanded(
+              child: ListView.builder(
+                itemCount: _textOverlays.length,
+                itemBuilder: (_, i) {
+                  final o = _textOverlays[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(Icons.text_fields, color: Colors.white70, size: 20),
+                    title: Text(o.text, style: const TextStyle(color: Colors.white, fontSize: 14), maxLines: 1),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                      onPressed: () => _removeTextOverlay(i),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Escribe tu texto...',
+                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                    filled: true,
+                    fillColor: Colors.grey[800],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  onSubmitted: (_) {
+                    if (_textController.text.isNotEmpty) {
+                      setState(() {
+                        if (_textOverlays.isNotEmpty && _textOverlays.last.isEditing) {
+                          _textOverlays.last.text = _textController.text;
+                        } else {
+                          _textOverlays.add(TextOverlay(text: _textController.text, color: _textColor, fontSize: _textFontSize));
+                        }
+                        _textController.clear();
+                      });
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send, color: Colors.blue, size: 20),
+                onPressed: () {
+                  if (_textController.text.isNotEmpty) {
+                    setState(() {
+                      if (_textOverlays.isNotEmpty && _textOverlays.last.isEditing) {
+                        _textOverlays.last.text = _textController.text;
+                      } else {
+                        _textOverlays.add(TextOverlay(text: _textController.text, color: _textColor, fontSize: _textFontSize));
+                      }
+                      _textController.clear();
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Color:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(width: 8),
+              ...['#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'].map((c) {
+                final color = Color(int.parse(c.replaceFirst('#', '0xFF')));
+                return GestureDetector(
+                  onTap: () => setState(() => _textColor = color),
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _textColor == color ? Colors.white : Colors.transparent, width: 2),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
         ],
       ),
     );
@@ -358,7 +638,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
       children: [
         SizedBox(
           width: 70,
-          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
         ),
         Expanded(
           child: SliderTheme(
@@ -376,7 +656,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
           width: 36,
           child: Text(
             value.toStringAsFixed(1),
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
             textAlign: TextAlign.right,
           ),
         ),

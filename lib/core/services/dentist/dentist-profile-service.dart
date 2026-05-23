@@ -189,7 +189,6 @@ class DentistProfileService {
           return list;
         })
         .handleError((e) {
-          debugPrint('Error in services stream: $e');
           return [];
         });
   }
@@ -233,7 +232,6 @@ class DentistProfileService {
           return list;
         })
         .handleError((e) {
-          debugPrint('Error in gallery stream: $e');
           return [];
         });
   }

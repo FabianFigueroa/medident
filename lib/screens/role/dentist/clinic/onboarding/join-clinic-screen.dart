@@ -293,7 +293,7 @@ class _JoinClinicScreenState extends State<JoinClinicScreen>
       _errorMsg = null;
     });
 
-    final cp = context.read<ClinicProvider>();
+    final cp = context.read<DentistClinicProvider>();
     final main = context.read<DentistMainProvider>();
     final userId = main.userId;
 

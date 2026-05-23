@@ -4,9 +4,14 @@ import 'package:medident/core/models/roles/user_role.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/providers/authgate/authgate-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
+import 'package:medident/core/providers/doctor/doctor-main-provider.dart';
+import 'package:medident/core/providers/patient/patient-main-provider.dart';
 import 'package:medident/core/providers/admin/admin-main-provider.dart';
 import 'package:medident/core/providers/employee/employee-main-provider.dart';
+import 'package:medident/core/providers/delivery/delivery-main-provider.dart';
+import 'package:medident/core/providers/notification/notification-provider.dart';
 import 'package:medident/core/providers/onboarding/onboarding-video-provider.dart';
+import 'package:medident/core/services/notification/notification-service.dart';
 import 'package:medident/core/utils/app-logger.dart';
 import 'package:medident/core/utils/app-navigation.dart';
 import 'package:medident/core/utils/screen-trace.dart';
@@ -55,11 +60,15 @@ class AuthGate extends StatelessWidget {
 
     if (user == null) return const SplashScreen(isAuthenticating: true);
 
+    // Vincular FCM token al usuario autenticado
+    NotificationService.setUserId(user.uid);
+
     ////////////////////////////////////////////////////////// Si es DENTISTA, le entregamos su MainProvider
     if (user.role == UserRole.dentist) {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => DentistMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
         ],
         child: _NavigationWrapper(role: user.role),
       );
@@ -70,6 +79,7 @@ class AuthGate extends StatelessWidget {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AdminMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
         ],
         child: _NavigationWrapper(role: user.role),
       );
@@ -80,12 +90,46 @@ class AuthGate extends StatelessWidget {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => EmployeeMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
         ],
         child: _NavigationWrapper(role: user.role),
       );
     }
 
-    // Para los demás roles (doctor, patient, delivery) sin MainProvider propio
+    ////////////////////////////////////////////////////////// Si es DOCTOR, le entregamos su DoctorMainProvider
+    if (user.role == UserRole.doctor) {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => DoctorMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
+        ],
+        child: _NavigationWrapper(role: user.role),
+      );
+    }
+
+    ////////////////////////////////////////////////////////// Si es PATIENT, le entregamos su PatientMainProvider
+    if (user.role == UserRole.patient) {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => PatientMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
+        ],
+        child: _NavigationWrapper(role: user.role),
+      );
+    }
+
+    ////////////////////////////////////////////////////////// Si es DELIVERY, le entregamos su DeliveryMainProvider
+    if (user.role == UserRole.delivery) {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => DeliveryMainProvider(user.uid)),
+          ChangeNotifierProvider(create: (_) => NotificationProvider(userId: user.uid)),
+        ],
+        child: _NavigationWrapper(role: user.role),
+      );
+    }
+
+    // Fallback
     return ScreenTrace(
                 tag: 'AUTH_GATE',
                 message: 'Usuario autenticado con rol ${AppLogger.roleName(user.role)}. Entrando a la navegacion principal.',
@@ -97,6 +141,26 @@ class AuthGate extends StatelessWidget {
   Widget _NavigationWrapper({required UserRole role}) {
     return Builder(
       builder: (context) {
+        NotificationService.setOnTapCallback((data) {
+          if (!context.mounted) return;
+          final type = data['type'] as String? ?? '';
+          switch (type) {
+            case 'appointment':
+            case 'appointment_reminder':
+              Navigator.pushNamed(context, '/schedule');
+              break;
+            case 'delivery_status':
+            case 'new_order':
+              Navigator.pushNamed(context, '/delivery');
+              break;
+            case 'security':
+            case 'rfid_alert':
+              Navigator.pushNamed(context, '/security');
+              break;
+            default:
+              Navigator.pushNamed(context, '/notifications');
+          }
+        });
         return NavigationsScreen(role: role);
       },
     );

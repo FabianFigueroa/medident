@@ -9,12 +9,14 @@ import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/models/patient-model.dart';
 import 'package:medident/core/models/product-model.dart';
 import 'package:medident/core/models/turno-model.dart';
+import 'package:medident/core/models/treatment-confession-model.dart';
+import 'package:medident/core/models/story-model.dart';
 import 'package:medident/core/services/clinic-service.dart';
 import 'package:medident/core/services/patient-service.dart';
 
 enum ClinicStatus { checking, noClinic, owner, employee, error }
 
-class ClinicProvider with ChangeNotifier {
+class DentistClinicProvider with ChangeNotifier {
   final ClinicService _service;
   final PatientService _patientService;
 
@@ -40,7 +42,12 @@ class ClinicProvider with ChangeNotifier {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _feedSub;
   bool _isLoadingFeed = false;
 
-  ClinicProvider({required ClinicService service})
+  List<TreatmentConfessionModel> _treatmentConfessions = [];
+  StreamSubscription<List<TreatmentConfessionModel>>? _confessionSub;
+  List<StoryModel> _clinicalStories = [];
+  StreamSubscription<List<StoryModel>>? _clinicalStorySub;
+
+  DentistClinicProvider({required ClinicService service})
       : _service = service,
         _patientService = PatientService();
 
@@ -106,6 +113,14 @@ class ClinicProvider with ChangeNotifier {
   List<Map<String, dynamic>> get clinicFeed => _clinicFeed;
   bool get isLoadingFeed => _isLoadingFeed;
 
+  List<TreatmentConfessionModel> get treatmentConfessions =>
+      _treatmentConfessions;
+  List<TreatmentConfessionModel> get approvedConfessions =>
+      _treatmentConfessions.where((c) => c.isApproved).toList();
+  List<TreatmentConfessionModel> get pendingConfessions =>
+      _treatmentConfessions.where((c) => !c.isApproved).toList();
+  List<StoryModel> get clinicalStories => _clinicalStories;
+
   int get todayAppointmentsCount {
     final now = DateTime.now();
     return _appointments.where((a) =>
@@ -145,6 +160,8 @@ class ClinicProvider with ChangeNotifier {
         _subscribeToTurnos();
         _subscribeToPromotions();
         _subscribeToClinicFeed();
+        _subscribeToTreatmentConfessions();
+        _subscribeToClinicalStories();
         _saveToCache();
       }
     } catch (e) {
@@ -175,6 +192,8 @@ class ClinicProvider with ChangeNotifier {
         _subscribeToTurnos();
         _subscribeToPromotions();
         _subscribeToClinicFeed();
+        _subscribeToTreatmentConfessions();
+        _subscribeToClinicalStories();
         notifyListeners();
       }
     } catch (e) {
@@ -222,11 +241,47 @@ class ClinicProvider with ChangeNotifier {
         notifyListeners();
       },
       onError: (e) {
-        debugPrint('Clinic feed stream error: $e');
         _isLoadingFeed = false;
         notifyListeners();
       },
     );
+  }
+
+  // ── Treatment Confessions ──────────────────────────────
+  void _subscribeToTreatmentConfessions() {
+    _confessionSub?.cancel();
+    if (_clinic == null) return;
+    _confessionSub =
+        _service.streamTreatmentConfessions(_clinic!.id).listen((list) {
+      _treatmentConfessions = list;
+      notifyListeners();
+    }, onError: (e) {
+    });
+  }
+
+  Future<String> createTreatmentConfession(
+      TreatmentConfessionModel confession) async {
+    return _service.createTreatmentConfession(confession);
+  }
+
+  Future<void> approveTreatmentConfession(String id) async {
+    await _service.approveTreatmentConfession(id);
+  }
+
+  Future<void> deleteTreatmentConfession(String id) async {
+    await _service.deleteTreatmentConfession(id);
+  }
+
+  // ── Clinical Stories ───────────────────────────────────
+  void _subscribeToClinicalStories() {
+    _clinicalStorySub?.cancel();
+    if (_clinic == null) return;
+    _clinicalStorySub =
+        _service.streamClinicalStories(_clinic!.id).listen((list) {
+      _clinicalStories = list;
+      notifyListeners();
+    }, onError: (e) {
+    });
   }
 
   Future<String> createClinicPost({
@@ -335,6 +390,8 @@ class ClinicProvider with ChangeNotifier {
       _subscribeToTurnos();
       _subscribeToPromotions();
       _subscribeToClinicFeed();
+      _subscribeToTreatmentConfessions();
+      _subscribeToClinicalStories();
       notifyListeners();
       return true;
     } catch (e) {
@@ -369,6 +426,8 @@ class ClinicProvider with ChangeNotifier {
         _subscribeToTurnos();
         _subscribeToPromotions();
         _subscribeToClinicFeed();
+        _subscribeToTreatmentConfessions();
+        _subscribeToClinicalStories();
       } else {
         _error = 'Error al unirse a la clínica.';
       }
@@ -409,8 +468,8 @@ class ClinicProvider with ChangeNotifier {
     }
   }
 
-  Future<void> loadTreatments() async {
-    if (_treatments.isNotEmpty || _clinic == null) return;
+  Future<void> loadTreatments({bool force = false}) async {
+    if (!force && (_treatments.isNotEmpty || _clinic == null)) return;
     _isLoadingTreatments = true;
     notifyListeners();
     try {
@@ -668,12 +727,79 @@ class ClinicProvider with ChangeNotifier {
     return _patientService.updateOdontogram(odontogramId, teethMap);
   }
 
+  // ── CRUD Clínica ──────────────────────────────────────
+  Future<void> updateClinic(Map<String, dynamic> updates) async {
+    if (_clinic == null) return;
+    try {
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      await FirebaseFirestore.instance.collection('clinics').doc(_clinic!.id).update(updates);
+      _clinic = ClinicModel.fromMap({..._clinic!.toMap(), ...updates}, _clinic!.id);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error updating clinic: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deactivateClinic() async {
+    if (_clinic == null) return;
+    try {
+      await FirebaseFirestore.instance.collection('clinics').doc(_clinic!.id).update({
+        'isActive': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      _clinic = null;
+      _status = ClinicStatus.noClinic;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deactivating clinic: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> addTreatment({
+    required String name,
+    required double price,
+    required int durationMinutes,
+  }) async {
+    if (_clinic == null) return;
+    try {
+      await FirebaseFirestore.instance.collection('treatments').add({
+        'clinicId': _clinic!.id,
+        'name': name,
+        'price': price,
+        'durationMinutes': durationMinutes,
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      await loadTreatments(force: true);
+    } catch (e) {
+      debugPrint('Error adding treatment: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deactivateTreatment(String treatmentId) async {
+    try {
+      await FirebaseFirestore.instance.collection('treatments').doc(treatmentId).update({
+        'isActive': false,
+      });
+      _treatments.removeWhere((t) => t.id == treatmentId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deactivating treatment: $e');
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _appointmentsSub?.cancel();
     _turnosSub?.cancel();
     _promotionsSub?.cancel();
     _feedSub?.cancel();
+    _confessionSub?.cancel();
+    _clinicalStorySub?.cancel();
     super.dispose();
   }
 }

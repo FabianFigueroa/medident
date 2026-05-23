@@ -240,7 +240,7 @@ class _PromotionBody extends StatelessWidget {
                   width: double.infinity,
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [BoxShadow(color: const Color(0xFF9333EA).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
                     ),
                     child: ElevatedButton(
@@ -249,7 +249,7 @@ class _PromotionBody extends StatelessWidget {
                         backgroundColor: const Color(0xFF9333EA),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
                       child: const Text('Solicitar servicio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -330,7 +330,7 @@ class _SlidesGallery extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(s.ctaText!, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
                           ),

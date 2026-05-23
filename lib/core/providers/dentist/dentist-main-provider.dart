@@ -3,8 +3,8 @@ import 'package:medident/core/providers/base/main-provider-base.dart';
 import 'package:medident/core/providers/dentist/dentist-profile-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
-import 'package:medident/core/providers/delivery/delivery-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-delivery-provider.dart';
 import 'package:medident/core/services/dentist/dentist-home-services.dart';
 import 'package:medident/core/services/dentist/dentist-security-services.dart';
 import 'package:medident/core/services/clinic-service.dart';
@@ -26,22 +26,22 @@ class DentistMainProvider extends MainProviderBase {
       getTypedProvider<DentistSecurityProvider>('security');
   DentistHomeProvider? get clinicProvider =>
       getTypedProvider<DentistHomeProvider>('clinic');
-  ClinicProvider? get clinicStatusProvider =>
-      getTypedProvider<ClinicProvider>('clinicStatus');
-  DeliveryProvider? get deliveryProvider =>
-      getTypedProvider<DeliveryProvider>('delivery');
+  DentistClinicProvider? get clinicStatusProvider =>
+      getTypedProvider<DentistClinicProvider>('clinicStatus');
+  DentistDeliveryProvider? get deliveryProvider =>
+      getTypedProvider<DentistDeliveryProvider>('delivery');
 
   @override
   Future<ChangeNotifier> createSectionProvider(String section) async {
     switch (section) {
       case 'home':
-        final statusP = getTypedProvider<ClinicProvider>('clinicStatus');
+        final statusP = getTypedProvider<DentistClinicProvider>('clinicStatus');
         final provider = DentistHomeProvider(service: _homeService, userId: userId, clinicId: statusP?.clinic?.id);
-        provider.loadInitialData();
+        await provider.loadInitialData();
         return provider;
 
       case 'clinic':
-        final statusP = getTypedProvider<ClinicProvider>('clinicStatus');
+        final statusP = getTypedProvider<DentistClinicProvider>('clinicStatus');
         final cid = statusP?.clinic?.id;
         final home = DentistHomeProvider(service: _homeService, userId: userId, clinicId: cid);
         await Future.wait([
@@ -53,7 +53,7 @@ class DentistMainProvider extends MainProviderBase {
         return home;
 
       case 'clinicStatus':
-        final provider = ClinicProvider(service: _clinicService);
+        final provider = DentistClinicProvider(service: _clinicService);
         await provider.checkClinicStatus(userId);
         return provider;
 
@@ -68,7 +68,8 @@ class DentistMainProvider extends MainProviderBase {
         return provider;
 
       case 'delivery':
-        final provider = DeliveryProvider(userId: userId);
+        final provider = DentistDeliveryProvider(userId: userId);
+        await provider.loadDeliveries();
         return provider;
 
       default:

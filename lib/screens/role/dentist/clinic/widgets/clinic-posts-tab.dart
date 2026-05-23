@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/services/clinic-service.dart';
 import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
@@ -14,9 +14,9 @@ class ClinicPostsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-    final clinicId = context.select<ClinicProvider, String>((p) => p.clinic?.id ?? '');
+    final clinicId = context.select<DentistClinicProvider, String>((p) => p.clinic?.id ?? '');
     final user = context.watch<AuthenticateProvider>().user;
-    final isOwner = context.select<ClinicProvider, bool>((p) => p.isOwner);
+    final isOwner = context.select<DentistClinicProvider, bool>((p) => p.isOwner);
 
     return CustomScrollView(
       slivers: [

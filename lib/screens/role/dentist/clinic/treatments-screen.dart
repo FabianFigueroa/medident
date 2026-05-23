@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/core/models/treatment-model.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
-import 'package:provider/provider.dart';
+import 'package:medident/core/services/clinic-service.dart';
 
 class TreatmentsScreen extends StatefulWidget {
   final String clinicId;
@@ -14,6 +13,7 @@ class TreatmentsScreen extends StatefulWidget {
 }
 
 class _TreatmentsScreenState extends State<TreatmentsScreen> with TickerProviderStateMixin {
+  final _clinicService = ClinicService();
   late TabController _tabCtrl;
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -121,11 +121,7 @@ class _TreatmentsScreenState extends State<TreatmentsScreen> with TickerProvider
 
   Widget _buildTreatmentsList() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('treatments')
-          .where('clinicId', isEqualTo: widget.clinicId)
-          .where('isActive', isEqualTo: true)
-          .snapshots(),
+      stream: _clinicService.streamTreatmentsByClinic(widget.clinicId),
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         final docs = snap.data!.docs;

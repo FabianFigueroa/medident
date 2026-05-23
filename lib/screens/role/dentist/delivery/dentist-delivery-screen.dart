@@ -17,7 +17,7 @@ class DentistDeliveryScreen extends StatefulWidget {
 }
 
 class _DentistDeliveryScreenState extends State<DentistDeliveryScreen> {
-  String? _initializedForUserId;
+  DeliveryProvider? _deliveryProvider;
 
   @override
   void didChangeDependencies() {
@@ -25,80 +25,47 @@ class _DentistDeliveryScreenState extends State<DentistDeliveryScreen> {
     final mainProvider = context.read<DentistMainProvider>();
     final userId = mainProvider.userId;
 
-    if (userId.isEmpty || _initializedForUserId == userId) return;
+    if (userId.isEmpty) return;
+    if (_deliveryProvider != null) return;
 
-    _initializedForUserId = userId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<DentistMainProvider>().initializeSection('delivery');
-    });
+    _deliveryProvider = DeliveryProvider(userId: userId);
+  }
+
+  @override
+  void dispose() {
+    _deliveryProvider?.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Selector<DentistMainProvider, bool>(
-        selector: (_, p) => p.isSectionLoading('delivery'),
-        builder: (context, isLoading, _) {
-          if (isLoading) {
-            return Scaffold(
-              body: Shimmer.fromColors(
-                baseColor: Colors.grey[300]!,
-                highlightColor: Colors.grey[100]!,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: List.generate(5, (_) => Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  )),
-                ),
+    if (_deliveryProvider == null) {
+      return Scaffold(
+        body: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: List.generate(5, (_) => Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-            );
-          }
-
-          final mainProvider = context.watch<DentistMainProvider>();
-          final error = mainProvider.getSectionError('delivery');
-
-          if (error != null) {
-            return Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 16),
-                    Text('Error: $error'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => mainProvider.initializeSection('delivery'),
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final deliveryProvider = mainProvider.deliveryProvider;
-
-          if (deliveryProvider == null) {
-            return Scaffold(
-              body: const Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          return ChangeNotifierProvider.value(
-            value: deliveryProvider,
-            child: ResponsiveUtils(
-              mobile: DentistDeliveryMobile(),
-              tablet: DentistDeliveryTablet(scrollController: ScrollController()),
-              desktop: DentistDeliveryDesktop(scrollController: ScrollController()),
-            ),
-          );
-        },
+            )),
+          ),
+        ),
       );
+    }
+
+    return ChangeNotifierProvider.value(
+      value: _deliveryProvider,
+      child: ResponsiveUtils(
+        mobile: DentistDeliveryMobile(),
+        tablet: DentistDeliveryTablet(scrollController: ScrollController()),
+        desktop: DentistDeliveryDesktop(scrollController: ScrollController()),
+      ),
+    );
   }
 }

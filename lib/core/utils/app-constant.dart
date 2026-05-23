@@ -23,15 +23,11 @@ class AppConstants {
   static const double marginXL = 32.0;
   static const double marginXXL = 48.0;
 
-  // Border Radius
+  // Border Radius (max 12)
   static const double radiusXXS = 4.0;
   static const double radiusXS = 8.0;
   static const double radiusS = 12.0;
-  static const double radiusM = 16.0;
-  static const double borderRadiusS = 8.0;
-  static const double borderRadiusM = 14.0;
-  static const double radiusL = 24.0;
-  static const double radiusXL = 32.0;
+  static const double radiusM = 12.0;
 
   // Icon Sizes
   static const double iconXS = 16.0;

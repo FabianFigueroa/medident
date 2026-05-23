@@ -7,6 +7,7 @@ import 'package:medident/screens/role/dentist/security/dentist-security-mobile.d
 import 'package:medident/screens/role/dentist/security/dentist-security-tablet.dart';
 import 'package:medident/screens/role/dentist/security/dentist-security-desktop.dart';
 import 'package:provider/provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:shimmer/shimmer.dart';
 
 class DentistSecurityScreen extends StatefulWidget {
@@ -37,95 +38,163 @@ class _DentistSecurityScreenState extends State<DentistSecurityScreen> {
   @override
   Widget build(BuildContext context) {
     return Selector<DentistMainProvider, bool>(
-        selector: (_, p) => p.isSectionLoading('security'),
-        builder: (context, isLoading, _) {
-          if (isLoading) {
-            return Scaffold(
-              body: _buildScreenShimmer(),
-            );
-          }
+      selector: (_, p) => p.isSectionLoading('security'),
+      builder: (context, isLoading, _) {
+        if (isLoading) {
+          return const Scaffold(
+            body: _AppleShimmer(),
+          );
+        }
 
-          final mainProvider = context.watch<DentistMainProvider>();
-          final error = mainProvider.getSectionError('security');
+        final mainProvider = context.watch<DentistMainProvider>();
+        final error = mainProvider.getSectionError('security');
 
-          if (error != null) {
-            return Scaffold(
-              body: Center(
+        if (error != null) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 16),
-                    Text('Error al cargar seguridad: $error'),
-                    const SizedBox(height: 16),
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3B30).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(Icons.shield_outlined, color: Color(0xFFFF3B30), size: 32),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Error de conexión',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1D1D1F),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      error,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 15, color: Color(0xFF86868B)),
+                    ),
+                    const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () => mainProvider.initializeSection('security'),
-                      child: const Text('Reintentar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF007AFF),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      ),
+                      child: const Text(
+                        'Reintentar',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
               ),
-            );
-          }
-
-          final securityProvider = mainProvider.dentistSecurityProvider;
-
-          if (securityProvider == null) {
-            return Scaffold(
-              body: _buildScreenShimmer(),
-            );
-          }
-
-          return ChangeNotifierProvider.value(
-            value: securityProvider,
-            child: ResponsiveUtils(
-              mobile: const DentistSecurityMobile(),
-              tablet: DentistSecurityTablet(scrollController: TrackingScrollController()),
-              desktop: DentistSecurityDesktop(scrollController: TrackingScrollController()),
             ),
           );
-        },
-      );
-  }
+        }
 
-  Widget _buildScreenShimmer() {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: ListView.builder(
-        itemCount: 5,
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (context, index) => Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+        final securityProvider = mainProvider.dentistSecurityProvider;
+
+        if (securityProvider == null) {
+          return const Scaffold(
+            body: _AppleShimmer(),
+          );
+        }
+
+        return ChangeNotifierProvider.value(
+          value: securityProvider,
+          child: ResponsiveUtils(
+            mobile: const DentistSecurityMobile(),
+            tablet: DentistSecurityTablet(scrollController: TrackingScrollController()),
+            desktop: DentistSecurityDesktop(scrollController: TrackingScrollController()),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _AppleShimmer extends StatelessWidget {
+  const _AppleShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFFF5F5F7),
+      highlightColor: Colors.white,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    height: 14,
-                    width: 120,
-                    color: Colors.white,
-                  ),
-                ],
+              Container(
+                width: 56, height: 56,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 200, height: 16,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
               ),
               const SizedBox(height: 12),
               Container(
-                height: 200,
-                color: Colors.white,
+                width: 140, height: 14,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                width: double.infinity, height: 160,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 80,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      height: 80,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

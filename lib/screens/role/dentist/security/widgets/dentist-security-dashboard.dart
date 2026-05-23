@@ -1,32 +1,28 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
-import 'package:medident/core/utils/app-constant.dart';
-import 'package:medident/core/utils/app-textstyle.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
 
-/// Widget que muestra el resumen ejecutivo de seguridad
 class DentistSecurityDashboard extends StatelessWidget {
   const DentistSecurityDashboard({super.key});
 
+  static const _accent = Color(0xFF007AFF);
+  static const _white = Colors.white;
+
   @override
   Widget build(BuildContext context) {
-   debugPrint('[DentistSecurityDashboard] build() iniciado');
     final provider = context.watch<DentistSecurityProvider>();
     final profile = provider.securityData;
-    
-    if (profile == null) {
-      return SliverToBoxAdapter(child: const SizedBox.shrink());
-    }
 
-    final int totalDevices = profile.lights.length +
+    if (profile == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    final totalDevices = profile.lights.length +
         profile.fans.length +
         profile.airs.length +
         profile.tvs.length +
         profile.doors.length +
         profile.voices.length;
 
-    final int activeDevices = 
+    final activeDevices =
         profile.lights.where((l) => l.isOn).length +
         profile.fans.where((f) => f.isOn).length +
         profile.airs.where((a) => a.isOn).length +
@@ -35,57 +31,59 @@ class DentistSecurityDashboard extends StatelessWidget {
         profile.voices.where((v) => v.isOn).length;
 
     return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.all(AppConstants.paddingM),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.primary.withOpacity(0.9),
-              AppColors.secondary.withOpacity(0.7)
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: _accent.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
             ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(AppConstants.radiusM),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            )
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'ðŸ¥ Seguridad Dental',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: AppConstants.paddingM),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildDashboardCard(
-                    icon: 'ðŸ†”',
-                    label: 'Tarjetas RFID',
-                    value: '${profile.rfidCards.length}',
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.shield_outlined, color: _white, size: 22),
                   ),
-                  _buildDashboardCard(
-                    icon: 'ðŸ”Œ',
-                    label: 'Dispositivos',
-                    value: '$totalDevices',
+                  const SizedBox(width: 12),
+                  Text(
+                    'Seguridad',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: _white,
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                  _buildDashboardCard(
-                    icon: 'âœ…',
-                    label: 'Activos',
-                    value: '$activeDevices',
-                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  _metric(Icons.credit_card_outlined, '${profile.rfidCards.length}', 'Tarjetas'),
+                  const SizedBox(width: 24),
+                  _metric(Icons.devices_outlined, '$totalDevices', 'Dispositivos'),
+                  const SizedBox(width: 24),
+                  _metric(Icons.check_circle_outlined, '$activeDevices', 'Activos'),
                 ],
               ),
             ],
@@ -95,27 +93,32 @@ class DentistSecurityDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildDashboardCard({
-    required String icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      children: [
-        Text(icon, style: const TextStyle(fontSize: 32)),
-        const SizedBox(height: AppConstants.paddingXS),
-        Text(
-          value,
-          style: AppTextStyles.headlineSmall.copyWith(
-            color: AppColors.white,
-            fontWeight: FontWeight.bold,
+  Widget _metric(IconData icon, String value, String label) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _white.withOpacity(0.7), size: 20),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: _white,
+              letterSpacing: -0.5,
+            ),
           ),
-        ),
-        Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.white),
-        ),
-      ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: _white.withOpacity(0.7),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

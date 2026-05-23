@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/models/clinical-record-model.dart';
 import 'package:medident/screens/widgets/shared/patient_search_sheet.dart';
@@ -53,7 +53,7 @@ class _ClinicHistorialTabState extends State<ClinicHistorialTab> {
     final procedureCtrl = TextEditingController();
     final diagnosisCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
-    final clinicProv = context.read<ClinicProvider>();
+    final clinicProv = context.read<DentistClinicProvider>();
     final clinicId = clinicProv.clinic?.id ?? '';
     final user = context.read<AuthenticateProvider>().user;
     String selectedPatientId = '';
@@ -159,7 +159,7 @@ class _ClinicHistorialTabState extends State<ClinicHistorialTab> {
     ));
     if (ok == true) {
       try {
-        await context.read<ClinicProvider>().deleteClinicalRecord(recordId);
+        await context.read<DentistClinicProvider>().deleteClinicalRecord(recordId);
         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registro eliminado'), backgroundColor: Colors.red));
       } catch (_) {}
     }
@@ -168,8 +168,8 @@ class _ClinicHistorialTabState extends State<ClinicHistorialTab> {
   @override
   Widget build(BuildContext context) {
     final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-    final clinicId = context.select<ClinicProvider, String>((p) => p.clinic?.id ?? '');
-    final patientCount = context.select<ClinicProvider, int>((p) => p.uniquePatientsCount);
+    final clinicId = context.select<DentistClinicProvider, String>((p) => p.clinic?.id ?? '');
+    final patientCount = context.select<DentistClinicProvider, int>((p) => p.uniquePatientsCount);
 
     return CustomScrollView(
       slivers: [
@@ -204,7 +204,7 @@ class _ClinicHistorialTabState extends State<ClinicHistorialTab> {
         ),
         StreamBuilder<QuerySnapshot>(
             stream: clinicId.isNotEmpty
-                ? context.read<ClinicProvider>().streamClinicClinicalRecords(clinicId)
+                ? context.read<DentistClinicProvider>().streamClinicClinicalRecords(clinicId)
                 : null,
             builder: (context, snapshot) {
               if (clinicId.isEmpty || snapshot.connectionState == ConnectionState.none) {

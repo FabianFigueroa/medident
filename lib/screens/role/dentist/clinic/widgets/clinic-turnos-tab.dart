@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:medident/core/models/turno-model.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 
 class ClinicTurnosTab extends StatefulWidget {
@@ -19,7 +19,7 @@ class _ClinicTurnosTabState extends State<ClinicTurnosTab> {
   @override
   Widget build(BuildContext context) {
     final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-    final turnos = context.select<ClinicProvider, List<TurnoModel>>((p) => p.turnos);
+    final turnos = context.select<DentistClinicProvider, List<TurnoModel>>((p) => p.turnos);
     final turnosByDay = _groupByDay(turnos);
 
     return CustomScrollView(
@@ -55,7 +55,7 @@ class _ClinicTurnosTabState extends State<ClinicTurnosTab> {
   }
 
   void _showDayEmployees(BuildContext context, DateTime day, List<TurnoModel> dayTurnos) {
-    final clinicProv = context.read<ClinicProvider>();
+    final clinicProv = context.read<DentistClinicProvider>();
     final userId = context.read<AuthenticateProvider>().user?.uid ?? '';
 
     showModalBottomSheet(
@@ -277,13 +277,13 @@ class _TurnoCard extends StatelessWidget {
             onSelected: (action) async {
               try {
                 if (action == 'start') {
-                  await context.read<ClinicProvider>().updateTurnoStatus(t.id, 'active');
+                  await context.read<DentistClinicProvider>().updateTurnoStatus(t.id, 'active');
                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Turno iniciado'), backgroundColor: Colors.green));
                 } else if (action == 'complete') {
-                  await context.read<ClinicProvider>().updateTurnoStatus(t.id, 'completed');
+                  await context.read<DentistClinicProvider>().updateTurnoStatus(t.id, 'completed');
                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Turno completado'), backgroundColor: Colors.blue));
                 } else if (action == 'cancel') {
-                  await context.read<ClinicProvider>().updateTurnoStatus(t.id, 'cancelled');
+                  await context.read<DentistClinicProvider>().updateTurnoStatus(t.id, 'cancelled');
                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Turno cancelado'), backgroundColor: Colors.orange));
                 } else if (action == 'delete') {
                   final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -295,7 +295,7 @@ class _TurnoCard extends StatelessWidget {
                     ],
                   ));
                   if (ok == true) {
-                    await context.read<ClinicProvider>().deleteTurno(t.id);
+                    await context.read<DentistClinicProvider>().deleteTurno(t.id);
                     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Turno eliminado'), backgroundColor: Colors.red));
                   }
                 }
@@ -321,7 +321,7 @@ class _TurnoCard extends StatelessWidget {
 class _DayEmployeeSheet extends StatefulWidget {
   final DateTime day;
   final List<TurnoModel> turnos;
-  final ClinicProvider clinicProv;
+  final DentistClinicProvider clinicProv;
   final String userId;
   final VoidCallback onRefresh;
 

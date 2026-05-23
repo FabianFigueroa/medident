@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,12 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:medident/screens/widgets/post-actions/post-actions-widget.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/models/user-model.dart';
+import 'package:medident/core/models/patient-model.dart';
 import 'package:medident/screens/shared/post-detail-screen.dart';
 import 'package:medident/screens/role/dentist/clinic/treatments-screen.dart';
 import 'package:medident/screens/role/dentist/clinic/widgets/clinic_attendance_widget.dart';
+import 'package:medident/screens/role/dentist/widget/treatment-confessions-carousel.dart';
 
 // ─── Tipos de publicación ─────────────────────────────────────
 class _PostTypeOption {
@@ -33,21 +36,60 @@ const _postTypes = [
   _PostTypeOption(Icons.videocam_rounded, 'Video', Color(0xFFFF6B6B), 'video'),
 ];
 
-class ClinicFeedTab extends StatelessWidget {
-  const ClinicFeedTab({super.key});
+class ClinicFeedTab extends StatefulWidget {
+  final String clinicId;
+  const ClinicFeedTab({super.key, this.clinicId = ''});
+
+  @override
+  State<ClinicFeedTab> createState() => _ClinicFeedTabState();
+}
+
+class _ClinicFeedTabState extends State<ClinicFeedTab> {
+  List<PatientModel> _patients = [];
+  StreamSubscription? _patientSub;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _patientSub?.cancel();
+    final cp = context.read<DentistClinicProvider>();
+    final cid = widget.clinicId.isNotEmpty
+        ? widget.clinicId
+        : cp.clinic?.id ?? '';
+    if (cid.isNotEmpty) {
+      _patientSub = cp.streamPatients().listen((list) {
+        if (mounted) setState(() => _patients = list);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _patientSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-    final clinicId = context.select<ClinicProvider, String>((p) => p.clinic?.id ?? '');
+    final cid = widget.clinicId.isNotEmpty
+        ? widget.clinicId
+        : context.select<DentistClinicProvider, String>((p) => p.clinic?.id ?? '');
     final user = context.watch<AuthenticateProvider>().user;
 
     return CustomScrollView(
       slivers: [
         SliverOverlapInjector(handle: handle),
-        SliverToBoxAdapter(child: ClinicAttendanceWidget(clinicId: clinicId)),
-        SliverToBoxAdapter(child: _CreatePostSection(user: user, clinicId: clinicId)),
-        _ClinicFeed(clinicId: clinicId, isOwner: context.select<ClinicProvider, bool>((p) => p.isOwner), user: user),
+        SliverToBoxAdapter(child: ClinicAttendanceWidget(clinicId: cid)),
+        SliverToBoxAdapter(
+          child: TreatmentConfessionsCarousel(
+            clinicId: cid,
+            userId: user?.uid,
+            patients: _patients,
+          ),
+        ),
+        SliverToBoxAdapter(child: _CreatePostSection(user: user, clinicId: cid)),
+        _ClinicFeed(clinicId: cid, isOwner: context.select<DentistClinicProvider, bool>((p) => p.isOwner), user: user),
         const SliverToBoxAdapter(child: SizedBox(height: 60)),
       ],
     );
@@ -103,7 +145,7 @@ class _CreatePostSectionState extends State<_CreatePostSection>
     if (text.isEmpty && _uploadedImageUrls.isEmpty) return;
     setState(() => _isPosting = true);
     try {
-      await context.read<ClinicProvider>().createClinicPost(
+      await context.read<DentistClinicProvider>().createClinicPost(
         createdBy: _userId,
         userName: _userName,
         userPhoto: _userPhoto,
@@ -347,7 +389,7 @@ class _CreatePostSectionState extends State<_CreatePostSection>
   }
 }
 
-// ─── FEED DE LA CLÍNICA (desde ClinicProvider) ───────────────
+// ─── FEED DE LA CLÍNICA (desde DentistClinicProvider) ───────────────
 class _ClinicFeed extends StatelessWidget {
   final String clinicId;
   final bool isOwner;
@@ -358,7 +400,7 @@ class _ClinicFeed extends StatelessWidget {
   Widget build(BuildContext context) {
     if (clinicId.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-    final feed = context.watch<ClinicProvider>().clinicFeed;
+    final feed = context.watch<DentistClinicProvider>().clinicFeed;
 
     if (feed.isEmpty) {
       return SliverToBoxAdapter(child: Padding(

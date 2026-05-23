@@ -18,6 +18,7 @@ import 'package:medident/screens/role/admin/shops/admin-shops-screen.dart';
 import 'package:medident/screens/role/admin/security/admin-security-screen.dart';
 import 'package:medident/screens/role/admin/deliveries/admin-delivery-screen.dart';
 import 'package:medident/screens/role/admin/profile/admin-profile-screen.dart';
+import 'package:medident/screens/role/admin/security/widgets/admin-contracts-nav-screen.dart';
 import 'package:medident/screens/role/dentist/home/dentist-home-screen.dart';
 import 'package:medident/screens/role/dentist/delivery/dentist-delivery-screen.dart';
 import 'package:medident/screens/role/dentist/clinic/dentist-clinic-screen.dart';
@@ -36,6 +37,9 @@ import 'package:medident/screens/role/patient/patient-home-screen.dart';
 import 'package:medident/screens/role/patient/patient-shop-screen.dart';
 import 'package:medident/screens/role/patient/patient-security-screen.dart';
 import 'package:medident/screens/role/patient/patient-profile-screen.dart';
+import 'package:medident/screens/role/delivery/delivery-home-screen.dart';
+import 'package:medident/screens/role/delivery/delivery-profile-screen.dart';
+import 'package:medident/screens/role/delivery/delivery-security-screen.dart';
 
 class NavigationsScreen extends StatefulWidget {
   final UserRole role;
@@ -113,6 +117,12 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               icon: HugeIcons.strokeRoundedTruck,
               activeIcon: HugeIcons.strokeRoundedTruckDelivery,
               screen: AdminDeliveryScreen(),
+            ),
+            _NavItem(
+              label: 'Contratos',
+              icon: HugeIcons.strokeRoundedFile01,
+              activeIcon: HugeIcons.strokeRoundedFile02,
+              screen: AdminContractsNavScreen(),
             ),
             _NavItem(
               label: 'Perfil',
@@ -286,55 +296,25 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               label: 'Home',
               icon: HugeIcons.strokeRoundedHome01,
               activeIcon: HugeIcons.strokeRoundedHome09,
-              screen: PatientHomeScreen(),
+              screen: DeliveryMainScreen(),
             ),
             _NavItem(
-              label: 'Shop',
-              icon: HugeIcons.strokeRoundedStore03,
-              activeIcon: HugeIcons.strokeRoundedShopSign,
-              screen: _RolePlaceholderScreen(
-                role: 'patient',
-                section: 'Shop',
-                title: 'Patient Shop Screen',
-                description:
-                    'Pantalla temporal para servicios, productos y catalogo pensado para pacientes.',
-              ),
-            ),
-            _NavItem(
-              label: 'Security',
+              label: 'Seguridad',
               icon: HugeIcons.strokeRoundedShield01,
               activeIcon: HugeIcons.strokeRoundedShield02,
-              screen: _RolePlaceholderScreen(
-                role: 'patient',
-                section: 'Security',
-                title: 'Patient Security Screen',
-                description:
-                    'Pantalla temporal para privacidad, autorizaciones y proteccion de la cuenta.',
-              ),
+              screen: DeliverySecurityScreen(),
             ),
             _NavItem(
-              label: 'delivery',
+              label: 'Entregas',
               icon: HugeIcons.strokeRoundedTruck,
               activeIcon: HugeIcons.strokeRoundedTruckDelivery,
-              screen: _RolePlaceholderScreen(
-                role: 'patient',
-                section: 'Delivery',
-                title: 'Patient Delivery Screen',
-                description:
-                    'Pantalla temporal para seguimiento de entregas, ordenes y solicitudes.',
-              ),
+              screen: DeliveryMainScreen(),
             ),
             _NavItem(
-              label: 'Profile',
+              label: 'Perfil',
               icon: HugeIcons.strokeRoundedUser,
               activeIcon: HugeIcons.strokeRoundedUserCircle,
-              screen: _RolePlaceholderScreen(
-                role: 'patient',
-                section: 'Profile',
-                title: 'Patient Profile Screen',
-                description:
-                    'Pantalla temporal para perfil, configuracion e historial personal.',
-              ),
+              screen: DeliveryProfileScreen(),
             ),
           ],
         );

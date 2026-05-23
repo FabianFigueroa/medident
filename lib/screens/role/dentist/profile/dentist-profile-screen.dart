@@ -1,7 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:medident/screens/role/dentist/profile/dentist-profile-mobile.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
 import 'package:medident/main_export.dart';
 
 class DentistProfileScreen extends StatefulWidget {

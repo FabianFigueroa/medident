@@ -54,3 +54,4 @@ export '../services/employees/employees-service.dart';
 
 // ── Notification services ──
 export '../services/notification/notification-export.dart';
+export '../services/notification/notification-data-service.dart';

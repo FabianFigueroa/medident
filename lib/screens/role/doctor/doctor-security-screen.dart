@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/main_export.dart';
-import 'package:medident/core/providers/authgate/authenticate-provider.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:medident/core/models/alert-model.dart';
+import 'package:medident/core/providers/doctor/doctor-main-provider.dart';
+import 'package:medident/core/providers/doctor/doctor-security-provider.dart';
+import 'package:medident/core/utils/responsive.dart';
 
 class DoctorSecurityScreen extends StatefulWidget {
   const DoctorSecurityScreen({super.key});
@@ -13,119 +16,264 @@ class DoctorSecurityScreen extends StatefulWidget {
 }
 
 class _DoctorSecurityScreenState extends State<DoctorSecurityScreen> {
-  bool _isLoading = true;
+  String? _initializedForUserId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mainProvider = context.read<DoctorMainProvider>();
+    final userId = mainProvider.userId;
+
+    if (userId.isEmpty || _initializedForUserId == userId) return;
+
+    _initializedForUserId = userId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<DoctorMainProvider>().initializeSection('security');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<DoctorMainProvider, bool>(
+      selector: (_, p) => p.isSectionLoading('security'),
+      builder: (context, isLoading, _) {
+        if (isLoading) {
+          return Scaffold(
+            body: _buildScreenShimmer(),
+          );
+        }
+
+        final mainProvider = context.watch<DoctorMainProvider>();
+        final error = mainProvider.getSectionError('security');
+
+        if (error != null) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  Text('Error al cargar seguridad: $error'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () =>
+                        mainProvider.initializeSection('security'),
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final securityProvider = mainProvider.securityProvider;
+
+        if (securityProvider == null) {
+          return Scaffold(
+            body: _buildScreenShimmer(),
+          );
+        }
+
+        return ChangeNotifierProvider.value(
+          value: securityProvider,
+          child: ResponsiveUtils(
+            mobile: const _DoctorSecurityBody(),
+            tablet: const _DoctorSecurityBody(),
+            desktop: const _DoctorSecurityBody(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScreenShimmer() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: ListView.builder(
+        itemCount: 5,
+        padding: const EdgeInsets.all(16),
+        itemBuilder: (context, index) => Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    height: 14,
+                    width: 120,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 200,
+                color: Colors.white,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DoctorSecurityBody extends StatefulWidget {
+  const _DoctorSecurityBody();
+
+  @override
+  State<_DoctorSecurityBody> createState() => _DoctorSecurityBodyState();
+}
+
+class _DoctorSecurityBodyState extends State<_DoctorSecurityBody> {
   List<Map<String, dynamic>> _accessLogs = [];
-  List<Map<String, dynamic>> _alerts = [];
-  String? _error;
+  bool _accessLogsLoading = true;
+  String? _accessLogsError;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadAccessLogs();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadAccessLogs() async {
     setState(() {
-      _isLoading = true;
-      _error = null;
+      _accessLogsLoading = true;
+      _accessLogsError = null;
     });
-
     try {
-      final user = context.read<AuthenticateProvider>().user;
-      if (user == null) return;
-
       final fs = FirebaseFirestore.instance;
-      final results = await Future.wait([
-        fs
-            .collection('rfid_logs')
-            .orderBy('timestamp', descending: true)
-            .limit(10)
-            .get(),
-        fs
-            .collection('alerts')
-            .where('userId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
-            .limit(10)
-            .get(),
-      ]);
-
+      final snap = await fs
+          .collection('rfid_logs')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .get();
+      if (!mounted) return;
       setState(() {
         _accessLogs =
-            results[0].docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _alerts =
-            results[1].docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _isLoading = false;
+            snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+        _accessLogsLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Error al cargar datos: $e';
-        _isLoading = false;
+        _accessLogsError = 'Error al cargar accesos: $e';
+        _accessLogsLoading = false;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final secProvider = context.watch<DoctorSecurityProvider>();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text('Seguridad'),
         backgroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? _buildError()
-                : _buildContent(),
+        onRefresh: _loadAccessLogs,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _buildSecurityStatus(),
+            const SizedBox(height: 24),
+            const Text(
+              'Accesos Recientes',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            if (_accessLogsLoading)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (_accessLogsError != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Text(_accessLogsError!,
+                          style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                          onPressed: _loadAccessLogs,
+                          child: const Text('Reintentar')),
+                    ],
+                  ),
+                ),
+              )
+            else if (_accessLogs.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: Text('Sin registros de acceso')),
+                ),
+              )
+            else
+              ..._accessLogs
+                  .take(5)
+                  .map((log) => _accessLogCard(log))
+                  .toList(),
+            const SizedBox(height: 24),
+            const Text(
+              'Alertas',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            if (secProvider.isLoading)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (secProvider.error != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('Error: ${secProvider.error}',
+                      style: const TextStyle(color: Colors.red)),
+                ),
+              )
+            else if (secProvider.alerts.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: Text('Sin alertas')),
+                ),
+              )
+            else
+              ...secProvider.alerts
+                  .take(5)
+                  .map((alert) => _alertCardFromModel(alert))
+                  .toList(),
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildContent() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildSecurityStatus(),
-        const SizedBox(height: 24),
-        const Text(
-          'Accesos Recientes',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        if (_accessLogs.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('Sin registros de acceso')),
-            ),
-          )
-        else
-          ..._accessLogs.take(5).map((log) => _accessLogCard(log)).toList(),
-        const SizedBox(height: 24),
-        const Text(
-          'Alertas',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        if (_alerts.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('Sin alertas')),
-            ),
-          )
-        else
-          ..._alerts.take(5).map((alert) => _alertCard(alert)).toList(),
-      ],
     );
   }
 
@@ -202,8 +350,8 @@ class _DoctorSecurityScreenState extends State<DoctorSecurityScreen> {
     );
   }
 
-  Widget _alertCard(Map<String, dynamic> alert) {
-    final severity = alert['severity'] ?? 'low';
+  Widget _alertCardFromModel(AlertModel alert) {
+    final severity = alert.severity;
     IconData icon;
     Color color;
 
@@ -226,27 +374,8 @@ class _DoctorSecurityScreenState extends State<DoctorSecurityScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(icon, color: color),
-        title: Text(alert['title'] ?? 'Alerta'),
-        subtitle: Text(alert['message'] ?? ''),
-      ),
-    );
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const HugeIcon(
-            icon: HugeIcons.strokeRoundedAlert01,
-            color: Colors.red,
-            size: 48,
-          ),
-          const SizedBox(height: 16),
-          Text(_error ?? 'Error desconocido'),
-          const SizedBox(height: 16),
-          ElevatedButton(onPressed: _loadData, child: const Text('Reintentar')),
-        ],
+        title: Text(alert.title),
+        subtitle: Text(alert.description),
       ),
     );
   }

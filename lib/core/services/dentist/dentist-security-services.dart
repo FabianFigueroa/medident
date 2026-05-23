@@ -1,5 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:medident/core/models/contract-request-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-rfid-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-security-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-sensor-model.dart';
@@ -124,6 +125,28 @@ class DentistSecurityService {
   Future<void> updateContractStatus(String userId, String status) async {
     await _securityCollection.doc(userId).update({'contract-status': status});
   }
+
+  Future<DocumentReference> createContractRequest(ContractRequestModel request) async {
+    final requestsCollection = FirebaseFirestore.instance.collection('contract_requests');
+    final docRef = await requestsCollection.add(request.toMap());
+    return docRef;
+  }
+
+  Future<void> submitContractForReview(String userId, ContractRequestModel request) async {
+    final batch = FirebaseFirestore.instance.batch();
+
+    final requestsCollection = FirebaseFirestore.instance.collection('contract_requests');
+    final requestRef = requestsCollection.doc();
+    batch.set(requestRef, request.toMap());
+
+    final securityRef = _securityCollection.doc(userId);
+    batch.set(securityRef, {
+      'contract-status': 'pending_review',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+  }
  
   /// Verifica si el documento de seguridad para un usuario existe.
   Future<bool> doesSecurityDocumentExist(String userId) async {
@@ -175,5 +198,12 @@ class DentistSecurityService {
       debugPrint("Error al obtener lectores: $e");
       return [];
     }
+  }
+
+  Stream<QuerySnapshot> streamEmployeesByClinic(String clinicId) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .where('clinicId', isEqualTo: clinicId)
+        .snapshots();
   }
 }

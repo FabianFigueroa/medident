@@ -101,4 +101,24 @@ class AgendaService {
       rethrow;
     }
   }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> getAppointmentsByDateRange({
+    required DateTime start,
+    required DateTime end,
+    int? limit,
+  }) async {
+    var query = _appointments
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('date', isLessThan: Timestamp.fromDate(end));
+
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    return query.get();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> getUsers({int limit = 50}) async {
+    return _firestore.collection('users').limit(limit).get();
+  }
 }

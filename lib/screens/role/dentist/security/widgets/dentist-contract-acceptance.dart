@@ -1,251 +1,606 @@
-﻿// c:\Users\DELL\StudioProjects\medident\lib\screens\role\dentist\security\widgets\contract_acceptance_widget.dart
+﻿import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
+import 'package:medident/core/providers/authgate/authenticate-provider.dart';
+import 'package:medident/screens/widgets/appbar/appbar-center.dart';
 import 'package:provider/provider.dart';
 
-class ContractAcceptanceWidget extends StatefulWidget {
-  const ContractAcceptanceWidget({super.key});
+class ContractAcceptance_Widget extends StatefulWidget {
+  const ContractAcceptance_Widget({super.key});
 
   @override
-  State<ContractAcceptanceWidget> createState() => _ContractAcceptanceWidgetState();
+  State<ContractAcceptance_Widget> createState() => _ContractAcceptance_WidgetState();
 }
 
-class _ContractAcceptanceWidgetState extends State<ContractAcceptanceWidget> {
+class _ContractAcceptance_WidgetState extends State<ContractAcceptance_Widget> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  final _signatureKey = GlobalKey<_SignaturePadState>();
+  bool _isLoading = false;
 
-  // Color primario inspirado en la imagen de referencia
-  static const Color _primaryColor = Color.fromARGB(255, 212, 17, 10); // Un tono de teal/cyan
+  static const _accent = Color(0xFF007AFF);
+  static const _darkText = Color(0xFF1D1D1F);
+  static const _mediumText = Color(0xFF86868B);
+  static const _cardBg = Color(0xFFF5F5F7);
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  Future<void> _selectDate() async {
+    debugPrint('[ContractAcceptance] _selectDate() llamado');
+    final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
+      initialDate: _selectedDate ?? DateTime.now().add(const Duration(days: 7)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: _primaryColor, // Color del encabezado del calendario
-              onPrimary: Colors.white, // Color del texto en el encabezado
-              onSurface: Colors.black, // Color del texto en el cuerpo del calendario
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: _primaryColor), // Color de los botones
-            ),
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: _accent,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: _darkText,
           ),
-          child: child!,
-        );
-      },
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: _accent),
+          ),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  ////////////////////////////////////////////////////////////// hour-widget
-  Future<void> _selectTime(BuildContext context) async {
-    final TimeOfDay? picked = await showTimePicker(
+  Future<void> _selectTime() async {
+    debugPrint('[ContractAcceptance] _selectTime() llamado');
+    final picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color.fromARGB(255, 26, 195, 144), // Color del encabezado del selector de hora
-              onPrimary: Color.fromARGB(255, 255, 255, 255), // Color del texto en el encabezado
-              onSurface: Colors.black, // Color del texto en el cuerpo del selector de hora
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: const Color.fromARGB(255, 242, 245, 244)), // Color de los botones
-            ),
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 9, minute: 0),
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: _accent,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: _darkText,
           ),
-          child: child!,
-        );
-      },
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: _accent),
+          ),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null && picked != _selectedTime) {
-      setState(() {
-        _selectedTime = picked;
-      });
+    if (picked != null) setState(() => _selectedTime = picked);
+  }
+
+  Future<void> _acceptContract() async {
+    debugPrint('[ContractAcceptance] _acceptContract() iniciado');
+    if (!_signatureKey.currentState!.hasSignature) {
+      debugPrint('[ContractAcceptance] Firma no presente, mostrando error');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor firma el contrato antes de aceptar')),
+      );
+      return;
+    }
+    if (_selectedDate == null || _selectedTime == null) {
+      debugPrint('[ContractAcceptance] Fecha/hora no seleccionada');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona fecha y hora para la instalación')),
+      );
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      debugPrint('[ContractAcceptance] Llamando provider.acceptContract()');
+      final provider = context.read<DentistSecurityProvider>();
+      final sigBytes = _signatureKey.currentState?.getSignatureData();
+      final sigBase64 = sigBytes != null ? base64Encode(sigBytes) : null;
+
+      final userModel = context.read<AuthenticateProvider>().user;
+      final dentistName = userModel?.fullName ?? '';
+      final dentistEmail = userModel?.email ?? '';
+
+      await provider.acceptContract(
+        installationDate: _selectedDate!,
+        installationTime: _selectedTime!,
+        dentistName: dentistName,
+        dentistEmail: dentistEmail,
+        signatureBase64: sigBase64,
+      );
+      debugPrint('[ContractAcceptance] provider.acceptContract() completado');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Solicitud enviada. Esperá la aprobación del administrador.'),
+            backgroundColor: Color(0xFF007AFF),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e, stack) {
+      debugPrint('[ContractAcceptance] Error en aceptar contrato: $e\n$stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<DentistSecurityProvider>();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '¡Bienvenido a la Seguridad Inteligente de Medident!',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: _primaryColor,
-                ),
-          ),
-          const SizedBox(height: 15),
-          Text(
-            'Para activar las funciones de seguridad IoT en tu clínica, es necesario aceptar nuestro contrato de servicio. Esto te permitirá gestionar sensores, tarjetas RFID y monitorear la seguridad en tiempo real.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 25),
-          _buildSectionTitle(context, 'Beneficios Clave:'),
-          _buildBenefitItem(context, 'Monitoreo en tiempo real de tus instalaciones.'),
-          _buildBenefitItem(context, 'Gestión de acceso con tarjetas RFID para personal autorizado.'),
-          _buildBenefitItem(context, 'Alertas instantáneas ante eventos de seguridad.'),
-          _buildBenefitItem(context, 'Integración sencilla con tus dispositivos IoT.'),
-          const SizedBox(height: 25),
-          _buildSectionTitle(context, 'Términos de Uso:'),
-          Text(
-            'Al aceptar este contrato, usted se compromete a cumplir con las políticas de uso justo de la plataforma Medident, a mantener la confidencialidad de sus credenciales y a utilizar los servicios de seguridad de manera responsable. Medident se compromete a proteger sus datos y a proporcionar un servicio ininterrumpido en la medida de lo posible.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-          ),
-          const SizedBox(height: 25),
-          _buildSectionTitle(context, 'Valor del Servicio:'),
-          Text(
-            'El costo mensual del servicio de seguridad IoT es de \$25.00 USD. Este monto será facturado automáticamente a su método de pago registrado. Puede cancelar el servicio en cualquier momento desde la configuración de su cuenta.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green.shade700,
-                ),
-          ),
-          const SizedBox(height: 30),
-          _buildSectionTitle(context, 'Programar Visita de Instalación:'),
-          const SizedBox(height: 10),
-          Row(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          //padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _selectDate(context),
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text(
-                    _selectedDate == null
-                        ? 'Seleccionar Fecha'
-                        : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: _primaryColor,
-                    backgroundColor: _primaryColor.withOpacity(0.1),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: _primaryColor),
-                    ),
+              Appbar_Center_Widget(
+                titleWidget: Text(
+                  'Seguridad IoT', 
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Poppins',
+                    color: Colors.white
+                    )),
+                backgroundColor: const ui.Color.fromARGB(255, 6, 199, 196),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.only(left: 15, right: 15),
+                child: Text(
+                  '- Contrato de Seguridad IoT',
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w700,
+                    color: _darkText,
+                    height: 1.1,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _selectTime(context),
-                  icon: const Icon(Icons.access_time),
-                  label: Text(
-                    _selectedTime == null
-                        ? 'Seleccionar Hora'
-                        : _selectedTime!.format(context),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: _primaryColor,
-                    backgroundColor: _primaryColor.withOpacity(0.1),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: _primaryColor),
-                    ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(left: 15, right: 15),
+                child: Text(
+                  'Activá las funciones de seguridad inteligente para tu clínica. Monitoreo en tiempo real, control de acceso RFID y alertas automáticas.',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: _mediumText,
+                    height: 1.5,
                   ),
                 ),
               ),
+              const SizedBox(height: 32),
+
+              // Benefits
+              _sectionTitle('Beneficios'),
+              const SizedBox(height: 12),
+              _benefitRow(Icons.sensors_outlined, 'Monitoreo en tiempo real de tus instalaciones'),
+              _benefitRow(Icons.credit_card_outlined, 'Gestión de acceso con tarjetas RFID'),
+              _benefitRow(Icons.notifications_outlined, 'Alertas instantáneas ante eventos'),
+              _benefitRow(Icons.devices_outlined, 'Integración con dispositivos IoT'),
+              const SizedBox(height: 28),
+
+              // Pricing
+              Padding(
+                padding: const EdgeInsets.only(left: 15, right: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _cardBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34C759).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.card_giftcard_outlined, color: Color(0xFF34C759), size: 24),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Primer mes gratis',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: _darkText,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Después \$10.000 COP/mes',
+                                  style: TextStyle(fontSize: 13, color: _mediumText),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34C759).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'GRATIS',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF34C759),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF9500).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.build_outlined, color: Color(0xFFFF9500), size: 24),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Instalación única',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: _darkText,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Incluye dispositivos y configuración ',
+                                  style: TextStyle(fontSize: 13, color: _mediumText),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Text(
+                            '\$120.000 COP',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: _darkText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+
+              // Schedule installation
+              _sectionTitle('Programar instalación'),
+              const SizedBox(height: 12),
+              Padding(
+                padding: EdgeInsets.only(left: 20, right: 20),
+                child: Row(
+                children: [
+                  Expanded(
+                    child: _outlinedButton(
+                      icon: Icons.calendar_today_outlined,
+                      label: _selectedDate == null
+                          ? 'Fecha'
+                          : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+                      onTap: _selectDate,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _outlinedButton(
+                      icon: Icons.access_time_outlined,
+                      label: _selectedTime == null
+                          ? 'Hora'
+                          : _selectedTime!.format(context),
+                      onTap: _selectTime,
+                    ),
+                  ),
+                ],
+              ),
+              ),
+              if (_selectedDate != null && _selectedTime != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Visita: ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year} a las ${_selectedTime!.format(context)}',
+                  style: const TextStyle(fontSize: 13, color: _accent, fontWeight: FontWeight.w500),
+                ),
+              ],
+              const SizedBox(height: 28),
+
+              // Terms
+              _sectionTitle('Términos del servicio'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Al aceptar, autorizás a Medident a instalar y configurar los dispositivos de seguridad IoT en tu clínica. Tus datos están protegidos bajo nuestros estándares de seguridad. Podés cancelar en cualquier momento desde la configuración.',
+                  style: TextStyle(fontSize: 14, color: _mediumText, height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // Signature
+              _sectionTitle('Firma digital'),
+              const SizedBox(height: 12),
+              Container(
+                height: 160,
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E5EA)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    SignaturePad(key: _signatureKey),
+                    if (!(_signatureKey.currentState?.hasSignature ?? false))
+                      const Center(
+                        child: Text(
+                          'Firmá aquí',
+                          style: TextStyle(color: Color(0xFFC7C7CC), fontSize: 16),
+                        ),
+                      ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: GestureDetector(
+                        onTap: () => _signatureKey.currentState?.clear(),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.refresh, size: 18, color: _mediumText),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Accept button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: (_selectedDate != null && _selectedTime != null && !_isLoading)
+                      ? _acceptContract
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFE5E5EA),
+                    disabledForegroundColor: const Color(0xFFC7C7CC),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22, height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Aceptar y Activar',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Podés revisar los términos en la sección de ayuda')),
+                    );
+                  },
+                  child: const Text(
+                    'Más información',
+                    style: TextStyle(color: _mediumText, fontSize: 15),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
-          if (_selectedDate != null && _selectedTime != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 15.0),
-              child: Text(
-                'Visita programada para: ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year} a las ${_selectedTime!.format(context)}',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: _primaryColor),
-              ),
-            ),
-          const SizedBox(height: 40),
-          Center(
-            child: ElevatedButton.icon(
-              onPressed: (_selectedDate != null && _selectedTime != null)
-                  ? () async {
-                      // Lógica para aceptar el contrato
-                      // Aquí podrías pasar _selectedDate y _selectedTime al provider
-                      await provider.acceptContract();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Contrato aceptado y visita programada.')),
-                      );
-                    }
-                  : null, // Deshabilitar botón si no se ha seleccionado fecha y hora
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Aceptar Contrato y Activar Servicio'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Puede revisar los términos completos en la sección de ayuda.')),
-                );
-              },
-              child: Text(
-                'Rechazar o Más Información',
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildSectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.deepPurple.shade700,
-            ),
+  Widget _sectionTitle(String title) {
+    return Text(
+      title,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: _darkText,
+        letterSpacing: -0.3,
       ),
     );
   }
 
-  Widget _buildBenefitItem(BuildContext context, String text) {
+  Widget _benefitRow(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.only(left: 10.0, bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle, color: _primaryColor, size: 20),
-          const SizedBox(width: 10),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFF34C759).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.check, color: Color(0xFF34C759), size: 16),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: const TextStyle(fontSize: 15, color: _darkText, height: 1.4),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _outlinedButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE5E5EA)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: _accent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 15, color: _darkText),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Signature Pad ────────────────────────────────────────────────────────────
+
+class SignaturePad extends StatefulWidget {
+  const SignaturePad({super.key});
+
+  @override
+  State<SignaturePad> createState() => _SignaturePadState();
+}
+
+class _SignaturePadState extends State<SignaturePad> {
+  List<List<Offset>> _strokes = [];
+  List<Offset> _currentStroke = [];
+
+  bool get hasSignature => _strokes.isNotEmpty;
+
+  void clear() {
+    debugPrint('[SignaturePad] clear()');
+    setState(() {
+      _strokes = [];
+      _currentStroke = [];
+    });
+  }
+
+  Uint8List? getSignatureData() {
+    debugPrint('[SignaturePad] getSignatureData()');
+    if (_strokes.isEmpty) return null;
+    final list = _strokes
+        .map((s) => s.map((o) => {'x': o.dx, 'y': o.dy}).toList())
+        .toList();
+    return base64Decode(base64Encode(utf8.encode(list.toString())));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onPanStart: (details) {
+        debugPrint('[SignaturePad] onPanStart: ${details.localPosition}');
+        setState(() {
+          _currentStroke = [details.localPosition];
+          _strokes.add(_currentStroke);
+        });
+      },
+      onPanUpdate: (details) {
+        setState(() {
+          _currentStroke.add(details.localPosition);
+        });
+      },
+      onPanEnd: (_) {
+        debugPrint('[SignaturePad] onPanEnd - total strokes: ${_strokes.length}');
+        _currentStroke = [];
+      },
+      child: RepaintBoundary(
+        child: LayoutBuilder(
+          builder: (context, constraints) => CustomPaint(
+            painter: _SignaturePainter(_strokes),
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<List<Offset>> strokes;
+  _SignaturePainter(this.strokes);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF1D1D1F)
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    for (final stroke in strokes) {
+      for (int i = 0; i < stroke.length - 1; i++) {
+        canvas.drawLine(stroke[i], stroke[i + 1], paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter old) => true;
 }

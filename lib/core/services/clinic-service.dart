@@ -6,6 +6,8 @@ import 'package:medident/core/models/clinic-model.dart';
 import 'package:medident/core/models/product-model.dart';
 import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/models/turno-model.dart';
+import 'package:medident/core/models/treatment-confession-model.dart';
+import 'package:medident/core/models/story-model.dart';
 
 class ClinicService {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -294,6 +296,14 @@ class ClinicService {
         .snapshots();
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamTreatmentsByClinic(String clinicId) {
+    return _firestore
+        .collection('treatments')
+        .where('clinicId', isEqualTo: clinicId)
+        .where('isActive', isEqualTo: true)
+        .snapshots();
+  }
+
   /// Posts de la clínica en tiempo real
   Stream<QuerySnapshot<Map<String, dynamic>>> streamClinicPosts(String clinicId) {
     return _firestore
@@ -435,6 +445,74 @@ class ClinicService {
       subs.add(sub);
     }
     return controller.stream;
+  }
+
+  // ── Treatment Confessions ─────────────────────────────
+  Future<List<TreatmentConfessionModel>> getTreatmentConfessions(
+    String clinicId, {
+    bool onlyApproved = true,
+    int limit = 20,
+  }) async {
+    Query query = _firestore
+        .collection('treatment_confessions')
+        .where('clinicId', isEqualTo: clinicId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (onlyApproved) query = query.where('isApproved', isEqualTo: true);
+    final snap = await query.get();
+    return snap.docs
+        .map((d) => TreatmentConfessionModel.fromMap(
+            d.data() as Map<String, dynamic>, d.id))
+        .toList();
+  }
+
+  Stream<List<TreatmentConfessionModel>> streamTreatmentConfessions(
+    String clinicId, {
+    bool onlyApproved = false,
+  }) {
+    Query query = _firestore
+        .collection('treatment_confessions')
+        .where('clinicId', isEqualTo: clinicId)
+        .orderBy('createdAt', descending: true);
+    if (onlyApproved) query = query.where('isApproved', isEqualTo: true);
+    return query.snapshots().map((snap) => snap.docs
+        .map((d) => TreatmentConfessionModel.fromMap(
+            d.data() as Map<String, dynamic>, d.id))
+        .toList());
+  }
+
+  Future<String> createTreatmentConfession(
+      TreatmentConfessionModel confession) async {
+    final ref = _firestore.collection('treatment_confessions').doc();
+    final data = confession.toMap();
+    data['createdAt'] = FieldValue.serverTimestamp();
+    await ref.set(data);
+    return ref.id;
+  }
+
+  Future<void> approveTreatmentConfession(String id) async {
+    await _firestore
+        .collection('treatment_confessions')
+        .doc(id)
+        .update({'isApproved': true});
+  }
+
+  Future<void> deleteTreatmentConfession(String id) async {
+    await _firestore.collection('treatment_confessions').doc(id).delete();
+  }
+
+  // ── Clinical Stories ───────────────────────────────────
+  Stream<List<StoryModel>> streamClinicalStories(String clinicId) {
+    return _firestore
+        .collection('stories')
+        .where('sourceType', isEqualTo: 'clinical')
+        .where('sourceId', isEqualTo: clinicId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) =>
+                StoryModel.fromJson(d.data(), d.id))
+            .toList());
   }
 
   Future<List<ClinicModel>> getClinicsForUser(String userId) async {

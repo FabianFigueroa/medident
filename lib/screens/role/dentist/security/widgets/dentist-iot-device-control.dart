@@ -1,125 +1,108 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
-import 'package:medident/core/utils/app-constant.dart';
-import 'package:medident/core/utils/app-textstyle.dart';
 import 'package:medident/main_export.dart';
 import 'package:provider/provider.dart';
 
-/// Widget para controlar dispositivos IoT
 class DentistIoTDeviceControl extends StatelessWidget {
   const DentistIoTDeviceControl({super.key});
 
+  static const _darkText = Color(0xFF1D1D1F);
+  static const _mediumText = Color(0xFF86868B);
+  static const _cardBg = Color(0xFFF5F5F7);
+
   @override
   Widget build(BuildContext context) {
-    debugPrint('[DentistIoTDeviceControl] build() iniciado');
     final provider = context.watch<DentistSecurityProvider>();
     final profile = provider.securityData;
+    if (profile == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-    if (profile == null) return const SizedBox.shrink();
-
-    final allDevices = [
-      ...profile.lights.map((d) => {'device': d, 'type': 'lights', 'icon': 'ðŸ’¡'}),
-      ...profile.fans.map((d) => {'device': d, 'type': 'fans', 'icon': 'ðŸŒ€'}),
-      ...profile.airs.map((d) => {'device': d, 'type': 'airs', 'icon': 'â„ï¸'}),
-      ...profile.tvs.map((d) => {'device': d, 'type': 'tvs', 'icon': 'ðŸ“º'}),
-      ...profile.doors.map((d) => {'device': d, 'type': 'doors', 'icon': 'ðŸšª'}),
-      ...profile.voices.map((d) => {'device': d, 'type': 'voices', 'icon': 'ðŸ“¢'}),
+    final allDevices = <_DeviceItem>[
+      ...profile.lights.map((d) => _DeviceItem(d, Icons.light_outlined, const Color(0xFFFF9500), 'lights')),
+      ...profile.fans.map((d) => _DeviceItem(d, Icons.air_outlined, const Color(0xFF007AFF), 'fans')),
+      ...profile.airs.map((d) => _DeviceItem(d, Icons.ac_unit_outlined, const Color(0xFF34C759), 'airs')),
+      ...profile.tvs.map((d) => _DeviceItem(d, Icons.tv_outlined, const Color(0xFF5856D6), 'tvs')),
+      ...profile.doors.map((d) => _DeviceItem(d, Icons.door_front_door_outlined, const Color(0xFFFF3B30), 'doors')),
+      ...profile.voices.map((d) => _DeviceItem(d, Icons.volume_up_outlined, const Color(0xFFAF52DE), 'voices')),
     ];
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ðŸ”Œ Control de Dispositivos', style: AppTextStyles.headlineSmall),
-            const SizedBox(height: AppConstants.paddingM),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 1,
-                crossAxisSpacing: AppConstants.paddingM,
-                mainAxisSpacing: AppConstants.paddingM,
+            const Text(
+              'Dispositivos IoT',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _darkText,
+                letterSpacing: -0.3,
               ),
-              itemCount: allDevices.length,
-              itemBuilder: (context, index) {
-                final item = allDevices[index];
-                final device = item['device'] as Device?;
-                final icon = item['icon'] as String?;
-                
-                if (device == null) return const SizedBox.shrink();
-                
-                return GestureDetector(
-                  onTap: () => provider.updateUserDeviceState(item['type'] as String, device.id, !device.isOn),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    decoration: BoxDecoration(
-                      color: device.isOn ? AppColors.primary.withOpacity(0.1) : AppColors.white,
-                      border: Border.all(
-                        color: device.isOn ? AppColors.primary : AppColors.grey300,
-                        width: 2,
+            ),
+            const SizedBox(height: 14),
+            ...allDevices.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: item.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                      boxShadow: device.isOn
-                          ? [
-                              BoxShadow(
-                                color: AppColors.primary.withOpacity(0.3),
-                                blurRadius: 8,
-                              )
-                            ]
-                          : null,
+                      child: Icon(item.icon, color: item.color, size: 20),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppConstants.paddingM),
+                    const SizedBox(width: 14),
+                    Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(icon ?? 'ðŸ“Œ', style: const TextStyle(fontSize: 28)),
-                              AnimatedRotation(
-                                turns: device.isOn ? 0.5 : 0,
-                                duration: const Duration(milliseconds: 300),
-                                child: Icon(
-                                  Icons.power_settings_new,
-                                  color: device.isOn ? AppColors.primary : AppColors.grey500,
-                                  size: 24,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            item.device.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _darkText,
+                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                device.name,
-                                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                device.isOn ? 'âœ… Activo' : 'â¸ï¸ Inactivo',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: device.isOn ? AppColors.positive : AppColors.grey600,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            item.device.room,
+                            style: TextStyle(fontSize: 12, color: _mediumText),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                    Switch(
+                      value: item.device.isOn,
+                      activeColor: const Color(0xFF34C759),
+                      onChanged: (val) => provider.updateUserDeviceState(
+                        item.type,
+                        item.device.id,
+                        val,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )),
           ],
         ),
       ),
     );
   }
+}
+
+class _DeviceItem {
+  final Device device;
+  final IconData icon;
+  final Color color;
+  final String type;
+  _DeviceItem(this.device, this.icon, this.color, this.type);
 }

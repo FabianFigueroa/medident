@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:medident/core/utils/app-constant.dart';
 import 'package:medident/core/utils/app-textstyle.dart';
 import 'package:medident/main_export.dart';

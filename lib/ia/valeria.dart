@@ -1,9 +1,9 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../main_export.dart';
+import '../core/widgets/app_card.dart';
 
 class ValeriaAssistant extends StatefulWidget {
   final Map<String, Function(Map<String, dynamic>)?>? extraTools;
@@ -29,13 +29,12 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
 
   static const double _collapsedSize = 56;
   static const double _panelWidth = 300;
-  static const double _panelHeight = 300;
-  static const double _avatarSize = 140;
+  static const double _panelHeight = 380;
+  static const double _avatarSize = 100;
 
   @override
   void initState() {
     super.initState();
-    // Register navigate tool for Valeria
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final valeria = context.read<ValeriaProvider>();
       valeria.registerTool('navigate', (params) {
@@ -152,7 +151,7 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
                 clipBehavior: Clip.hardEdge,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(
-                    _collapsedSize / 2 + (24 - _collapsedSize / 2) * t,
+                    _collapsedSize / 2 + (12 - _collapsedSize / 2) * t,
                   ),
                 ),
                 child: Stack(
@@ -205,15 +204,31 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
                   height: _collapsedSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: AppColors.primary.withValues(alpha: 0.15),
                   ),
                 );
               },
             ),
-          ValeriaRiveAvatar(
-            size: _collapsedSize,
-            expression: valeria.expression,
-            isTyping: valeria.isTyping,
+          Container(
+            width: _collapsedSize,
+            height: _collapsedSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowDark,
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ValeriaRiveAvatar(
+              size: _collapsedSize,
+              expression: valeria.expression,
+              isTyping: valeria.isTyping,
+              cropToTopHalf: true,
+            ),
           ),
           if (valeria.unreadCount > 0)
             Positioned(
@@ -222,7 +237,7 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
               child: Container(
                 padding: const EdgeInsets.all(5),
                 decoration: const BoxDecoration(
-                  color: Colors.red,
+                  color: AppColors.error,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
@@ -244,81 +259,95 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
     final lastResponse = valeria.messages.isNotEmpty && !valeria.messages.last.isUser
         ? valeria.messages.last.text
         : null;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Column(
-            children: [
-              _buildHeader(valeria),
-              _buildAvatarArea(valeria),
-              if (valeria.isTyping)
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Pensando...',
-                    style: TextStyle(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic),
-                  ),
-                )
-              else if (lastResponse != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    lastResponse,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 11,
-                      height: 1.3,
-                    ),
-                  ),
+    return AppCard(
+      margin: EdgeInsets.zero,
+      padding: EdgeInsets.zero,
+      borderRadius: 12,
+      elevation: 6,
+      color: AppColors.white,
+      shadowColor: AppColors.shadowDark,
+      child: Column(
+        children: [
+          _buildHeader(valeria),
+          _buildAvatarArea(valeria),
+          if (valeria.isTyping)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Pensando...',
+                style: TextStyle(color: AppColors.grey500, fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+            )
+          else if (lastResponse != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                lastResponse,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.grey700,
+                  fontSize: 11,
+                  height: 1.3,
                 ),
-              const Spacer(),
-              _buildInputArea(valeria),
-            ],
-          ),
-        ),
+              ),
+            ),
+          const Spacer(),
+          _buildInputArea(valeria),
+        ],
       ),
     );
   }
 
   Widget _buildHeader(ValeriaProvider valeria) {
-    return Align(
-      alignment: Alignment.centerRight,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'Valeria AI',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
           if (valeria.messages.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.white.withValues(alpha: 0.4), size: 13),
+              icon: const Icon(Icons.delete_outline, color: AppColors.grey500, size: 16),
               onPressed: () => valeria.clearMessages(),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               tooltip: 'Limpiar',
             ),
           IconButton(
-            icon: Icon(Icons.visibility_off_outlined, color: Colors.white.withValues(alpha: 0.5), size: 14),
+            icon: const Icon(Icons.visibility_off_outlined, color: AppColors.grey500, size: 16),
             onPressed: () => valeria.toggleVisibility(),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             tooltip: 'Ocultar',
           ),
           IconButton(
-            icon: Icon(Icons.close, color: Colors.white.withValues(alpha: 0.6), size: 16),
+            icon: const Icon(Icons.close, color: AppColors.grey700, size: 18),
             onPressed: _toggleExpand,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             tooltip: 'Cerrar',
           ),
         ],
@@ -330,17 +359,23 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
     return AnimatedBuilder(
       animation: Listenable.merge([_floatCtrl, _zoomCtrl]),
       builder: (context, _) {
-        final floatY = math.sin(_floatCtrl.value * math.pi * 2) * 8;
+        final floatY = math.sin(_floatCtrl.value * math.pi * 2) * 6;
         final zoom = 1.0 + (_zoomAnim.value * 0.35);
-        return Center(
-          child: Transform.translate(
-            offset: Offset(0, floatY),
-            child: Transform.scale(
-              scale: zoom,
-              child: ValeriaRiveAvatar(
-                size: _avatarSize,
-                expression: valeria.expression,
-                isTyping: valeria.isTyping,
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: Transform.translate(
+              offset: Offset(0, floatY),
+              child: Transform.scale(
+                scale: zoom,
+                child: ClipOval(
+                  child: ValeriaRiveAvatar(
+                    size: _avatarSize,
+                    expression: valeria.expression,
+                    isTyping: valeria.isTyping,
+                    cropToTopHalf: true,
+                  ),
+                ),
               ),
             ),
           ),
@@ -351,25 +386,22 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
 
   Widget _buildInputArea(ValeriaProvider valeria) {
     return Container(
-      margin: const EdgeInsets.all(8),
+      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1,
-        ),
+        color: AppColors.grey50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _textCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
               decoration: const InputDecoration(
                 hintText: 'Escribe algo...',
-                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                hintStyle: TextStyle(color: AppColors.grey400, fontSize: 12),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               ),
@@ -383,12 +415,12 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                color: _isListening ? Colors.red : Colors.white.withValues(alpha: 0.15),
+                color: _isListening ? AppColors.error : AppColors.grey200,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 _isListening ? Icons.mic : Icons.mic_none,
-                color: _isListening ? Colors.white : Colors.white70,
+                color: _isListening ? Colors.white : AppColors.grey600,
                 size: 14,
               ),
             ),
@@ -400,16 +432,16 @@ class _ValeriaAssistantState extends State<ValeriaAssistant>
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: AppColors.primary,
                 shape: BoxShape.circle,
               ),
               child: valeria.isTyping
                   ? const SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Icon(Icons.send, color: Colors.white70, size: 14),
+                  : const Icon(Icons.send, color: Colors.white, size: 14),
             ),
           ),
         ],

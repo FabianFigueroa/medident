@@ -7,7 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'odontogram-editor-screen.dart';
+import 'package:medident/screens/role/dentist/widget/layer-odontogram-editor.dart';
 
 class PatientDetailScreen extends StatefulWidget {
   final PatientModel patient;
@@ -193,7 +193,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
   }
 
   Widget _buildHistoryTab(PatientModel p) {
-    final cp = context.read<ClinicProvider>();
+    final cp = context.read<DentistClinicProvider>();
     if (cp.clinic == null) return const SizedBox.shrink();
     return StreamBuilder(
       stream: cp.streamClinicalRecords(cp.clinic!.id, p.id),
@@ -343,7 +343,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         const PopupMenuItem(value: 'delete', child: Text('Eliminar', style: TextStyle(color: Colors.red))),
       ],
       onSelected: (action) {
-        final cp = context.read<ClinicProvider>();
+        final cp = context.read<DentistClinicProvider>();
         if (action == 'delete') {
           cp.deleteClinicalRecord(record.id);
         }
@@ -513,7 +513,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () {
-              final cp = context.read<ClinicProvider>();
+              final cp = context.read<DentistClinicProvider>();
               cp.updatePatientUser(p.id, {
                 'fullName': nameCtrl.text.trim(),
                 'phoneNumber': phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
@@ -548,7 +548,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () {
-              final cp = context.read<ClinicProvider>();
+              final cp = context.read<DentistClinicProvider>();
               cp.updatePatientProfile(p.id, {
                 'notes': notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
               });
@@ -591,7 +591,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () {
-              final cp = context.read<ClinicProvider>();
+              final cp = context.read<DentistClinicProvider>();
               final auth = context.read<AuthenticateProvider>();
               final dentistName = auth.user?.fullName ?? auth.user?.userName ?? 'Desconocido';
               if (cp.clinic == null) return;
@@ -622,9 +622,24 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider.value(
-          value: context.read<ClinicProvider>(),
-          child: OdontogramEditorScreen(patient: widget.patient),
+        builder: (_) => Scaffold(
+          backgroundColor: const Color(0xFFF6F7F9),
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Odontograma - ${widget.patient.fullName}',
+              style: const TextStyle(fontFamily: 'Ubuntu-Bold', fontSize: 15),
+            ),
+          ),
+          body: LayerOdontogramEditor(
+            patientId: widget.patient.id,
+            patientName: widget.patient.fullName,
+          ),
         ),
       ),
     );
@@ -648,7 +663,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       ),
     );
     if (confirmed == true && mounted) {
-      final cp = context.read<ClinicProvider>();
+      final cp = context.read<DentistClinicProvider>();
       await cp.deletePatient(widget.patient.id);
       if (mounted) Navigator.pop(context);
     }

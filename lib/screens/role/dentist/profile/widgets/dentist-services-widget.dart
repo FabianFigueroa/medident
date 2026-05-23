@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:medident/core/utils/app-colors.dart';
+import 'package:medident/core/widgets/app_card.dart';
 
 class DentistServicesWidget extends StatelessWidget {
   final List<Map<String, dynamic>>? services;
@@ -16,59 +18,51 @@ class DentistServicesWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Color(0x1A0F172A), blurRadius: 10, offset: Offset(0, 4)),
-        ],
-      ),
+    final items = services ?? [];
+    return AppCard(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.all(16),
+      elevation: 3,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Servicios',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Ubuntu-Bold',
-                    color: Color(0xFF0F172A),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Servicios',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3),
+              ),
+              if (isOwnProfile)
+                GestureDetector(
+                  onTap: onAddService,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.add, color: AppColors.primary, size: 18),
                   ),
                 ),
-                if (isOwnProfile)
-                  GestureDetector(
-                    onTap: onAddService,
-                    child: const Icon(Icons.add_circle_outline, color: Colors.blue, size: 24),
-                  ),
-              ],
-            ),
+            ],
           ),
-          if ((services ?? []).isEmpty)
+          const SizedBox(height: 8),
+          if (items.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.all(16),
               child: Center(
-                child: Text(
-                  'No hay servicios registrados',
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
+                child: Text('No hay servicios registrados', style: TextStyle(color: AppColors.grey500, fontSize: 14)),
               ),
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: (services ?? []).length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
               itemBuilder: (context, index) {
-                final service = (services ?? [])[index];
+                final service = items[index];
                 final name = service['name'] ?? service['title'] ?? 'Servicio ${index + 1}';
                 final price = service['price'] ?? service['cost'] ?? '';
                 final duration = service['duration'] ?? service['time'] ?? '';
@@ -80,48 +74,23 @@ class DentistServicesWidget extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.medical_services, color: Colors.blue, size: 20),
+                    child: const Icon(Icons.medical_services, color: AppColors.primary, size: 20),
                   ),
-                  title: Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
                   subtitle: description.isNotEmpty
-                      ? Text(
-                          description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        )
+                      ? Text(description, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.grey500))
                       : null,
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (price.isNotEmpty)
-                        Text(
-                          '\$$price',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                            fontSize: 14,
-                          ),
-                        ),
-                      if (duration.isNotEmpty)
-                        Text(
-                          duration,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 11,
-                          ),
-                        ),
+                      if (price.toString().isNotEmpty)
+                        Text('\$$price', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 14)),
+                      if (duration.toString().isNotEmpty)
+                        Text(duration.toString(), style: const TextStyle(color: AppColors.grey500, fontSize: 11)),
                     ],
                   ),
                   onTap: onServiceTap != null ? () => onServiceTap!(index) : null,

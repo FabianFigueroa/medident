@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:medident/core/providers/clinic/clinic-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
 
 class ClinicShimmer extends StatelessWidget {

@@ -89,7 +89,7 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
-                  child: Appbar_Container_Widget(
+                  child: Appbar_Center_Widget(
                     title: 'Inicio',
                     leftIcon: HugeIcon(icon: HugeIcons.strokeRoundedMenu01, size: 25),
                     rightIcon: HugeIcon(icon: HugeIcons.strokeRoundedSearch01, size: 25),
@@ -153,12 +153,30 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                 SliverToBoxAdapter(
                   child: Create_Newposts_Widget(
                     userId: provider.userId.isNotEmpty ? provider.userId : 'user_dentist_1',
-                    userName: 'Dra. Ana García',
+                    userName: provider.currentUserName.isNotEmpty ? provider.currentUserName : 'Dentista',
                     userPhoto: '',
                     onPublished: () => provider.refreshAll(),
                   ),
                 ),
-                if (provider.isLoading)
+                if (provider.loadError != null)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                          const SizedBox(height: 16),
+                          Text('Error: ${provider.loadError}', textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => provider.refreshAll(),
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (provider.isLoading)
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => _buildTabletShimmer(),

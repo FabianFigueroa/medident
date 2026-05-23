@@ -32,7 +32,7 @@ class _OdontogramEditorScreenState extends State<OdontogramEditorScreen> {
   }
 
   Future<void> _loadExisting() async {
-    final cp = context.read<ClinicProvider>();
+    final cp = context.read<DentistClinicProvider>();
     if (cp.clinic == null) return;
     final odontogram = await cp.getOdontogram(widget.patient.id);
     if (odontogram != null && mounted) {
@@ -72,7 +72,7 @@ class _OdontogramEditorScreenState extends State<OdontogramEditorScreen> {
   }
 
   Future<void> _save() async {
-    final cp = context.read<ClinicProvider>();
+    final cp = context.read<DentistClinicProvider>();
     final main = context.read<DentistMainProvider>();
     if (cp.clinic == null) return;
 
