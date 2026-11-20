@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:medident/core/models/post-model.dart';
 import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
 import 'package:medident/screens/role/dentist/posts/post-detail-screen.dart';
+import 'package:medident/screens/shared/clinic-public-screen.dart';
+import 'package:medident/core/services/clinic-service.dart';
 import 'package:medident/screens/widgets/media/media_grid.dart';
 
 class Post_One_Widget extends StatefulWidget {
@@ -273,10 +275,31 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
     );
   }
 
+  Future<void> _openSource() async {
+    if (widget.post.sourceType != 'clinic') return;
+    final clinicId = widget.post.sourceId.isNotEmpty
+        ? widget.post.sourceId
+        : (widget.post.clinicId ?? '');
+    if (clinicId.isEmpty) return;
+    final clinic = await ClinicService().getClinic(clinicId);
+    if (!mounted || clinic == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ClinicPublicScreen(clinic: clinic)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = widget.post.media;
     final hasMedia = media.isNotEmpty;
+    final displayName = widget.post.sourceName.isNotEmpty
+        ? widget.post.sourceName
+        : (widget.post.title.isNotEmpty ? widget.post.title : 'Usuario');
+    final displayPhoto = (widget.post.sourcePhoto?.isNotEmpty ?? false)
+        ? widget.post.sourcePhoto!
+        : (widget.post.userPhoto ?? '');
+    final isClinicPost = widget.post.sourceType == 'clinic';
     
     return GestureDetector(
       onTap: _openDetail,
@@ -311,15 +334,22 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
                           width: 2,
                         ),
                       ),
-                    child: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: widget.post.userPhoto != null && widget.post.userPhoto!.isNotEmpty
-                          ? CachedNetworkImageProvider(widget.post.userPhoto!)
-                          : null,
-                      child: widget.post.userPhoto == null || widget.post.userPhoto!.isEmpty
-                          ? const Icon(Icons.person, color: Colors.grey)
-                          : null,
+                    child: GestureDetector(
+                      onTap: _openSource,
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: displayPhoto.isNotEmpty
+                            ? CachedNetworkImageProvider(displayPhoto)
+                            : null,
+                        child: displayPhoto.isEmpty
+                            ? Icon(
+                                isClinicPost
+                                    ? Icons.local_hospital
+                                    : Icons.person,
+                                color: Colors.grey)
+                            : null,
+                      ),
                     ),
                   ),
                 ),
@@ -328,11 +358,27 @@ class _Post_One_WidgetState extends State<Post_One_Widget>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.post.title.isNotEmpty ? widget.post.title : 'Usuario',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                        GestureDetector(
+                          onTap: _openSource,
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              if (isClinicPost) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.verified,
+                                    size: 14, color: Color(0xFF4F46E5)),
+                              ],
+                            ],
                           ),
                         ),
                         if (widget.post.city.isNotEmpty)

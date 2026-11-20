@@ -1,9 +1,12 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
+import 'package:medident/screens/role/dentist/home/widgets/medident_collapsing_bar.dart';
+import 'package:medident/screens/widgets/shared/clinic-connect-screen.dart';
+import 'package:medident/screens/widgets/shared/clinics-promotion-card.dart';
+import 'package:medident/screens/widgets/shared/pending-clinic-invites-card.dart';
 
 class EmployeeHomeMobile extends StatefulWidget {
   const EmployeeHomeMobile({super.key});
@@ -19,7 +22,9 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<EmployeeHomeProvider>().loadInitialData();
+      context.read<EmployeeMainProvider>().initializeSection('clinic');
     });
   }
 
@@ -36,9 +41,20 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     final employeeName = user?.fullName ?? 'Empleado';
     final isLoading = provider.isLoading;
     final error = provider.error;
-    final turnos = provider.turnos;
     final alerts = provider.alerts;
     final globalPromotions = provider.globalPromotions;
+    final main = context.read<EmployeeMainProvider>();
+    final unread = context.watch<NotificationProvider>().unreadCount;
+    final carouselItems = globalPromotions
+        .map((promo) => MedidentCarouselItem.fromProduct(
+              promo,
+              promoterName: employeeName,
+              promoterRole: 'Equipo Medident',
+              promoterAvatar: user?.imageUrl ?? '',
+              promoterUid: main.userId,
+              onCtaPressed: () {},
+            ))
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -47,16 +63,48 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            _buildAppBar(employeeName),
+            MedidentCollapsingBar(
+              collapsedTitle: 'Medident',
+              expandedHeight: 420,
+              isLoading: isLoading && globalPromotions.isEmpty,
+              userProfile: MedidentBrandProfile(
+                storeOrUserName: employeeName,
+                roleOrCity: 'Equipo Medident',
+                avatarUrl: user?.imageUrl ?? '',
+                uid: main.userId,
+              ),
+              carouselItems: carouselItems,
+              notificationBadgeCount: unread,
+              scrollController: _scrollController,
+              onNotificationPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationScreen()),
+              ),
+              onSearchPressed: () {},
+              onScannerPressed: () {},
+              onCarouselItemTapped: (_) {},
+              onProfileCardTapped: (_) {},
+            ),
             _buildQuickActions(),
-            _buildGlobalPromotions(globalPromotions),
+            _buildClinicBanner(),
+            const SliverToBoxAdapter(child: ClinicsPromotionCard()),
+            PendingClinicInvitesCard(
+              userId: main.userId,
+              onAccepted: () {
+                context
+                    .read<EmployeeMainProvider>()
+                    .clinicProvider
+                    ?.checkClinicStatus(main.userId);
+                context.read<EmployeeHomeProvider>().loadInitialData();
+              },
+            ),
             if (isLoading) ...[
               _buildShimmerSection(),
               _buildShimmerSection(),
             ] else if (error != null)
               _buildErrorSection(error)
             else ...[
-              _buildTurnosSection(turnos),
               if (alerts.isNotEmpty) _buildAlertsSection(alerts),
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
@@ -66,31 +114,58 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
     );
   }
 
-  Widget _buildAppBar(String name) {
+  Widget _buildClinicBanner() {
+    final main = context.read<EmployeeMainProvider>();
+    final clinicProvider = main.clinicProvider;
+    if (clinicProvider == null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
     return SliverToBoxAdapter(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)]),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Hola,', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+      child: ListenableBuilder(
+        listenable: clinicProvider,
+        builder: (context, _) {
+          final clinic = clinicProvider.clinic;
+          final hasClinic = clinic != null;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Card(
+              color: Colors.white,
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF6A1B9A).withOpacity(0.1),
+                  child: const Icon(Icons.local_hospital,
+                      color: Color(0xFF6A1B9A)),
+                ),
+                title: Text(
+                  hasClinic ? clinic.name : 'Sin clinica vinculada',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  hasClinic
+                      ? (clinicProvider.isOwner
+                          ? 'Propietario (CEO)'
+                          : 'Miembro del equipo')
+                      : 'Crea o unite con un codigo',
+                ),
+                trailing: TextButton(
+                  onPressed: () => _openClinic(clinicProvider),
+                  child: Text(hasClinic ? 'Ver' : 'Vincular'),
+                ),
               ),
-              child: _NotificationBadge(),
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openClinic(DentistClinicProvider clinicProvider) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClinicConnectScreen(
+          userId: context.read<EmployeeMainProvider>().userId,
+          clinicProvider: clinicProvider,
         ),
       ),
     );
@@ -162,125 +237,6 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
             const SizedBox(height: 6),
             Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlobalPromotions(List<ProductModel> promos) {
-    if (promos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: SizedBox(
-          height: 140,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: promos.length,
-            itemBuilder: (context, index) {
-              final promo = promos[index];
-              return Container(
-                width: 260,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(promo.name,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    if (promo.description.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(promo.description,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                    ],
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTurnosSection(List<Map<String, dynamic>> turnos) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Mis Turnos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                TextButton(onPressed: () {}, child: const Text('Ver todos')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (turnos.isEmpty)
-              Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.schedule, color: Colors.grey, size: 48),
-                      const SizedBox(height: 12),
-                      const Text('No tienes turnos asignados', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ...turnos.map((turno) => _turnoCard(turno)).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _turnoCard(Map<String, dynamic> turno) {
-    final date = (turno['date'] as Timestamp?)?.toDate();
-    final status = turno['status'] ?? 'scheduled';
-    Color statusColor;
-    switch (status) {
-      case 'in_progress': statusColor = Colors.orange; break;
-      case 'completed': statusColor = Colors.green; break;
-      case 'cancelled': statusColor = Colors.red; break;
-      default: statusColor = Colors.blue;
-    }
-    return Card(
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-          child: Icon(Icons.schedule, color: statusColor, size: 24),
-        ),
-        title: Text(date != null ? '${date.day}/${date.month}/${date.year}' : 'Sin fecha',
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('${turno['startTime'] ?? ''} - ${turno['endTime'] ?? ''}'),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-          child: Text(status, style: TextStyle(color: statusColor, fontSize: 12)),
         ),
       ),
     );
@@ -358,49 +314,6 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final unreadCount = context.watch<NotificationProvider>().unreadCount;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12)),
-      child: Stack(
-        children: [
-          const Icon(Icons.notifications, color: Colors.white, size: 24),
-          if (unreadCount > 0)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 18,
-                  minHeight: 18,
-                ),
-                child: Text(
-                  unreadCount > 9 ? '9+' : '$unreadCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

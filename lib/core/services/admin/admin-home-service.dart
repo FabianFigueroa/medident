@@ -80,6 +80,7 @@ class AdminHomeService {
     try {
       final snap = await _firestore.collection('promotions')
           .where('scope', isEqualTo: 'global')
+          .limit(10)
           .get();
       return snap.docs.map((d) => ProductModel.fromJson(d.data(), d.id)).toList();
     } catch (e) {

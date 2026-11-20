@@ -29,6 +29,7 @@ class UserModel {
   final String? clinicId;
   final bool isClinicOwner;
   final String? bio;
+  final String? profileCaption;
   final String? clinicName;
   final String? website;
   final String? licenseNumber;
@@ -55,6 +56,7 @@ class UserModel {
     this.clinicId,
     this.isClinicOwner = false,
     this.bio,
+    this.profileCaption,
     this.clinicName,
     this.website,
     this.licenseNumber,
@@ -81,6 +83,7 @@ class UserModel {
     String? clinicId,
     bool? isClinicOwner,
     String? bio,
+    String? profileCaption,
     String? clinicName,
     String? website,
     String? licenseNumber,
@@ -106,6 +109,7 @@ class UserModel {
       clinicId: clinicId ?? this.clinicId,
       isClinicOwner: isClinicOwner ?? this.isClinicOwner,
       bio: bio ?? this.bio,
+      profileCaption: profileCaption ?? this.profileCaption,
       clinicName: clinicName ?? this.clinicName,
       website: website ?? this.website,
       licenseNumber: licenseNumber ?? this.licenseNumber,
@@ -135,6 +139,7 @@ class UserModel {
       'clinicId': clinicId,
       'isClinicOwner': isClinicOwner,
       'bio': bio,
+      'profileCaption': profileCaption,
       'clinicName': clinicName,
       'website': website,
       'licenseNumber': licenseNumber,
@@ -184,6 +189,7 @@ class UserModel {
       clinicId: map['clinicId'],
       isClinicOwner: map['isClinicOwner'] ?? false,
       bio: map['bio'],
+      profileCaption: map['profileCaption'] ?? map['bio'],
       clinicName: map['clinicName'],
       website: map['website'],
       licenseNumber: map['licenseNumber'],

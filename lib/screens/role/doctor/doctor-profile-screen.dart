@@ -4,6 +4,7 @@ import 'package:medident/core/providers/doctor/doctor-main-provider.dart';
 import 'package:medident/core/providers/doctor/doctor-profile-provider.dart';
 import 'package:medident/core/utils/responsive.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
+import 'package:medident/screens/widgets/shared/profile-clinic-card.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   const DoctorProfileScreen({super.key});
@@ -58,6 +59,7 @@ class _DoctorProfileBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<DoctorProfileProvider>().userProfile;
+    final authUser = context.watch<AuthenticateProvider>().user;
     final fullName = profile?['fullName'] as String? ?? 'Doctor';
     final email = profile?['email'] as String? ?? '';
     final initial = (fullName.isNotEmpty ? fullName[0] : 'D').toUpperCase();
@@ -96,6 +98,13 @@ class _DoctorProfileBody extends StatelessWidget {
                           const TextStyle(color: Colors.white70, fontSize: 14)),
                 ],
               ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: ProfileClinicCard(
+              userId: authUser?.uid ?? '',
+              clinicId: profile?['clinicId'] as String?,
+              isClinicOwner: profile?['isClinicOwner'] == true,
             ),
           ),
           SliverToBoxAdapter(

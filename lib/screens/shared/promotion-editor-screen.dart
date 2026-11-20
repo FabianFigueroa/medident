@@ -142,11 +142,39 @@ class _PromotionEditorScreenState extends State<PromotionEditorScreen> with Tick
       final imageUrls = slides.map((s) => s.imageUrl).toList();
       final isClinic = widget.clinicId != null && widget.clinicId!.isNotEmpty;
       final category = _categoryCtrl.text.trim();
+      final name = _nameCtrl.text.trim();
+      final description = _descCtrl.text.trim();
+
+      String? clinicName;
+      String? clinicLogo;
+      if (isClinic) {
+        try {
+          final clinicDoc = await FirebaseFirestore.instance
+              .collection('clinics')
+              .doc(widget.clinicId)
+              .get();
+          final clinicData = clinicDoc.data();
+          if (clinicData != null) {
+            clinicName = (clinicData['name'] as String?)?.trim();
+            clinicLogo = clinicData['logoUrl'] as String?;
+          }
+        } catch (_) {}
+      }
+
+      final sourceName = isClinic
+          ? (clinicName?.isNotEmpty == true ? clinicName! : widget.userName ?? 'Clínica')
+          : (widget.userName ?? 'Usuario');
+      final sourcePhoto = isClinic
+          ? (clinicLogo?.isNotEmpty == true ? clinicLogo : widget.userPhoto)
+          : widget.userPhoto;
+
+      final expiresAt =
+          _validUntil != null ? Timestamp.fromDate(_validUntil!) : null;
 
       await FirebaseFirestore.instance.collection('promotions').add({
         'type': 'promo',
-        'name': _nameCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
+        'name': name,
+        'description': description,
         'price': price,
         'discountPrice': _discountedPrice(price),
         'imageUrls': imageUrls,
@@ -156,18 +184,48 @@ class _PromotionEditorScreenState extends State<PromotionEditorScreen> with Tick
         'userName': widget.userName,
         'userPhoto': widget.userPhoto,
         'clinicId': isClinic ? widget.clinicId : '',
-        'clinicName': null,
+        'clinicName': clinicName,
         'source': isClinic ? 'clinic' : 'user',
+        'sourceName': sourceName,
+        'sourcePhoto': sourcePhoto,
         'terms': _termsCtrl.text.trim().isNotEmpty ? _termsCtrl.text.trim() : null,
         'isFeatured': false,
         'isAvailable': true,
         'isActive': true,
-        'scope': 'profile',
+        'scope': isClinic ? 'global' : 'profile',
         'rating': null,
         'reviewsCount': 0,
-        'expiresAt': _validUntil != null ? Timestamp.fromDate(_validUntil!) : null,
+        'expiresAt': expiresAt,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Publica tambien como post para que aparezca de inmediato en el feed
+      // del home, en el feed de la clinica y en la galeria del perfil.
+      await FirebaseFirestore.instance.collection('posts').add({
+        'type': 'promo',
+        'userId': widget.userId,
+        'createdBy': widget.userId,
+        'userName': widget.userName ?? '',
+        'userPhoto': widget.userPhoto ?? '',
+        'sourceType': isClinic ? 'clinic' : 'user',
+        'sourceId': isClinic ? widget.clinicId : widget.userId,
+        'sourceName': sourceName,
+        'sourcePhoto': sourcePhoto ?? '',
+        'description': description.isNotEmpty ? '$name\n$description' : name,
+        'imageUrls': imageUrls,
+        'media': imageUrls
+            .map((url) => {'type': 'image', 'url': url})
+            .toList(),
+        'likesCount': 0,
+        'commentsCount': 0,
+        'sharesCount': 0,
+        'likedBy': <String>[],
+        'isActive': true,
+        'promotionId': null,
+        if (isClinic) 'clinicId': widget.clinicId,
+        if (expiresAt != null) 'expiresAt': expiresAt,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {

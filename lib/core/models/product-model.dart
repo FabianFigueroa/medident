@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/core/models/promotion-slide-model.dart';
 
 class ProductModel {
@@ -12,6 +12,11 @@ class ProductModel {
   final String? category;
   final String? clinicId;
   final String? clinicName;
+  final String? clinicLogo;
+  final String? source;
+  final String? sourceName;
+  final String? sourcePhoto;
+  final String? videoUrl;
   final double? rating;
   final int? reviewsCount;
   final bool isFeatured;
@@ -35,6 +40,11 @@ class ProductModel {
     this.category,
     this.clinicId,
     this.clinicName,
+    this.clinicLogo,
+    this.source,
+    this.sourceName,
+    this.sourcePhoto,
+    this.videoUrl,
     this.rating,
     this.reviewsCount,
     this.isFeatured = false,
@@ -66,11 +76,28 @@ class ProductModel {
   }
 
   factory ProductModel.fromJson(Map<String, dynamic> map, String id) {
-    List<String> urls = [];
-    if (map['imageUrls'] != null) {
-      urls = List<String>.from(map['imageUrls']);
-    } else if (map['imageUrl'] != null && (map['imageUrl'] as String).isNotEmpty) {
-      urls = [map['imageUrl'] as String];
+    final urls = <String>[];
+    final rawList = map['imageUrls'] ?? map['images'] ?? map['photos'];
+    if (rawList is List) {
+      urls.addAll(
+        rawList
+            .whereType<Object>()
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty),
+      );
+    }
+    for (final key in const [
+      'imageUrl',
+      'image',
+      'photo',
+      'photoUrl',
+      'thumbnail',
+      'thumbnailUrl',
+    ]) {
+      final value = map[key];
+      if (value is String && value.trim().isNotEmpty) {
+        urls.add(value.trim());
+      }
     }
 
     List<PromotionSlide> slides = [];
@@ -78,6 +105,11 @@ class ProductModel {
       slides = (map['slides'] as List)
           .map((s) => PromotionSlide.fromJson(s as Map<String, dynamic>))
           .toList();
+    }
+    if (urls.isEmpty) {
+      urls.addAll(
+        slides.map((s) => s.imageUrl.trim()).where((u) => u.isNotEmpty),
+      );
     }
 
     return ProductModel(
@@ -91,6 +123,11 @@ class ProductModel {
       category: map['category'],
       clinicId: map['clinicId'],
       clinicName: map['clinicName'],
+      clinicLogo: map['clinicLogo'] ?? map['sourcePhoto'],
+      source: map['source'],
+      sourceName: map['sourceName'],
+      sourcePhoto: map['sourcePhoto'],
+      videoUrl: map['videoUrl'],
       rating: map['rating']?.toDouble(),
       reviewsCount: map['reviewsCount'] ?? 0,
       isFeatured: map['isFeatured'] ?? false,
@@ -116,6 +153,11 @@ class ProductModel {
       'category': category,
       'clinicId': clinicId,
       'clinicName': clinicName,
+      'clinicLogo': clinicLogo,
+      'source': source,
+      'sourceName': sourceName,
+      'sourcePhoto': sourcePhoto,
+      'videoUrl': videoUrl,
       'rating': rating,
       'reviewsCount': reviewsCount,
       'isFeatured': isFeatured,
@@ -141,6 +183,11 @@ class ProductModel {
     String? category,
     String? clinicId,
     String? clinicName,
+    String? clinicLogo,
+    String? source,
+    String? sourceName,
+    String? sourcePhoto,
+    String? videoUrl,
     double? rating,
     int? reviewsCount,
     bool? isFeatured,
@@ -164,6 +211,11 @@ class ProductModel {
       category: category ?? this.category,
       clinicId: clinicId ?? this.clinicId,
       clinicName: clinicName ?? this.clinicName,
+      clinicLogo: clinicLogo ?? this.clinicLogo,
+      source: source ?? this.source,
+      sourceName: sourceName ?? this.sourceName,
+      sourcePhoto: sourcePhoto ?? this.sourcePhoto,
+      videoUrl: videoUrl ?? this.videoUrl,
       rating: rating ?? this.rating,
       reviewsCount: reviewsCount ?? this.reviewsCount,
       isFeatured: isFeatured ?? this.isFeatured,

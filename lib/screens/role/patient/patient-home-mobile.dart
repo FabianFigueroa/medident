@@ -6,6 +6,8 @@ import 'package:medident/main_export.dart';
 import 'package:intl/intl.dart';
 import 'package:medident/screens/shared/widgets/calendar_table.dart';
 import 'package:medident/screens/widgets/shared/create_appointment_sheet.dart';
+import 'package:medident/screens/widgets/shared/clinics-promotion-card.dart';
+import 'package:medident/screens/role/dentist/home/widgets/medident_collapsing_bar.dart';
 
 class PatientHomeMobile extends StatefulWidget {
   const PatientHomeMobile({super.key});
@@ -42,6 +44,17 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
             ?.cast<Map<String, dynamic>>() ??
         [];
     final globalPromotions = homeProvider.globalPromotions;
+    final unread = context.watch<NotificationProvider>().unreadCount;
+    final carouselItems = globalPromotions
+        .map((promo) => MedidentCarouselItem.fromProduct(
+              promo,
+              promoterName: userName,
+              promoterRole: 'Paciente Medident',
+              promoterAvatar: user?.imageUrl ?? '',
+              promoterUid: user?.uid ?? '',
+              onCtaPressed: () {},
+            ))
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -50,9 +63,31 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            _buildAppBar(userName),
+            MedidentCollapsingBar(
+              collapsedTitle: 'Medident',
+              expandedHeight: 420,
+              isLoading: isLoading && globalPromotions.isEmpty,
+              userProfile: MedidentBrandProfile(
+                storeOrUserName: userName,
+                roleOrCity: 'Paciente Medident',
+                avatarUrl: user?.imageUrl ?? '',
+                uid: user?.uid ?? '',
+              ),
+              carouselItems: carouselItems,
+              notificationBadgeCount: unread,
+              scrollController: _scrollController,
+              onNotificationPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationScreen()),
+              ),
+              onSearchPressed: () {},
+              onScannerPressed: () {},
+              onCarouselItemTapped: (_) {},
+              onProfileCardTapped: (_) {},
+            ),
             _buildQuickActions(),
-            _buildGlobalPromotions(globalPromotions),
+            const SliverToBoxAdapter(child: ClinicsPromotionCard()),
             if (isLoading) ...[
               _buildShimmerSection(),
               _buildShimmerSection(),

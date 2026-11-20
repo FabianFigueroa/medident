@@ -17,6 +17,12 @@ class StoryModel {
   final List<String> likedBy;
   final int likesCount;
   final DateTime createdAt;
+  final DateTime? expiresAt;
+
+  bool get isExpired {
+    final exp = expiresAt;
+    return exp != null && exp.isBefore(DateTime.now());
+  }
 
   // Source
   final String sourceType;
@@ -43,6 +49,7 @@ class StoryModel {
     this.likedBy = const [],
     this.likesCount = 0,
     required this.createdAt,
+    this.expiresAt,
     this.sourceType = 'user',
     this.sourceId = '',
     this.sourceName = '',
@@ -67,6 +74,7 @@ class StoryModel {
       likedBy: likedByList,
       likesCount: map['likesCount'] ?? 0,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      expiresAt: (map['expiresAt'] as Timestamp?)?.toDate(),
       sourceType: map['sourceType']?.toString() ?? 'user',
       sourceId: map['sourceId']?.toString() ?? map['userId']?.toString() ?? '',
       sourceName: map['sourceName']?.toString() ?? map['userName']?.toString() ?? '',
@@ -89,6 +97,7 @@ class StoryModel {
       'likedBy': likedBy,
       'likesCount': likesCount,
       'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
     };
   }
 
@@ -107,6 +116,7 @@ class StoryModel {
     List<String>? likedBy,
     int? likesCount,
     DateTime? createdAt,
+    DateTime? expiresAt,
   }) {
     return StoryModel(
       id: id ?? this.id,
@@ -123,6 +133,7 @@ class StoryModel {
       likedBy: likedBy ?? this.likedBy,
       likesCount: likesCount ?? this.likesCount,
       createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
     );
   }
 }

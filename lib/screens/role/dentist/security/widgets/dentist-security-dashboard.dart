@@ -1,12 +1,11 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/main_export.dart';
+import 'package:medident/core/utils/app-colors.dart';
+import 'package:medident/core/utils/app-constant.dart';
+import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:provider/provider.dart';
 
 class DentistSecurityDashboard extends StatelessWidget {
   const DentistSecurityDashboard({super.key});
-
-  static const _accent = Color(0xFF007AFF);
-  static const _white = Colors.white;
 
   @override
   Widget build(BuildContext context) {
@@ -32,21 +31,21 @@ class DentistSecurityDashboard extends StatelessWidget {
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingM, AppConstants.paddingM, AppConstants.paddingM, AppConstants.paddingS),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppConstants.paddingL),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+              colors: [AppColors.primary, AppColors.purpleColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppConstants.radiusS),
             boxShadow: [
               BoxShadow(
-                color: _accent.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: AppConstants.elevationXL,
+                offset: const Offset(0, AppConstants.elevationM),
               ),
             ],
           ),
@@ -59,10 +58,10 @@ class DentistSecurityDashboard extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppConstants.radiusXS),
                     ),
-                    child: const Icon(Icons.shield_outlined, color: _white, size: 22),
+                    child: const Icon(Icons.shield_outlined, color: AppColors.white, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -70,19 +69,19 @@ class DentistSecurityDashboard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
-                      color: _white,
+                      color: AppColors.white,
                       letterSpacing: -0.3,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppConstants.paddingL),
               Row(
                 children: [
                   _metric(Icons.credit_card_outlined, '${profile.rfidCards.length}', 'Tarjetas'),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: AppConstants.paddingL),
                   _metric(Icons.devices_outlined, '$totalDevices', 'Dispositivos'),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: AppConstants.paddingL),
                   _metric(Icons.check_circle_outlined, '$activeDevices', 'Activos'),
                 ],
               ),
@@ -98,14 +97,14 @@ class DentistSecurityDashboard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: _white.withOpacity(0.7), size: 20),
+          Icon(icon, color: AppColors.white.withOpacity(0.7), size: 20),
           const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w700,
-              color: _white,
+              color: AppColors.white,
               letterSpacing: -0.5,
             ),
           ),
@@ -113,7 +112,7 @@ class DentistSecurityDashboard extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 13,
-              color: _white.withOpacity(0.7),
+              color: AppColors.white.withOpacity(0.7),
               fontWeight: FontWeight.w500,
             ),
           ),

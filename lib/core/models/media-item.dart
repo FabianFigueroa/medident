@@ -116,18 +116,31 @@ class MediaItem {
   /// Convierte Firestore data mixta: puede venir 'media' (nuevo) o 'imageUrls' (legacy)
   static List<MediaItem> fromFirestore(Map<String, dynamic> data) {
     if (data['media'] is List) {
-      return (data['media'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map(MediaItem.fromMap)
+      final parsed = (data['media'] as List)
+          .where((e) => e is Map)
+          .map((e) => MediaItem.fromMap(Map<String, dynamic>.from(e as Map)))
+          .where((m) => m.url.isNotEmpty)
           .toList();
+      if (parsed.isNotEmpty) return parsed;
     }
     // Legacy: imageUrls (List<String>)
     if (data['imageUrls'] is List) {
-      return fromLegacyUrls(List<String>.from(data['imageUrls']));
+      final urls = (data['imageUrls'] as List)
+          .where((e) => e is String && e.isNotEmpty)
+          .map((e) => e as String)
+          .toList();
+      if (urls.isNotEmpty) return fromLegacyUrls(urls);
     }
     // Legacy: imageUrl (String singular)
     if (data['imageUrl'] is String && (data['imageUrl'] as String).isNotEmpty) {
       return [MediaItem.fromUrl(data['imageUrl'] as String)];
+    }
+    // Otros formatos heredados habituales.
+    for (final key in const ['photoUrl', 'image', 'photo', 'thumbnail', 'thumbnailUrl']) {
+      final value = data[key];
+      if (value is String && value.isNotEmpty) {
+        return [MediaItem.fromUrl(value)];
+      }
     }
     return [];
   }

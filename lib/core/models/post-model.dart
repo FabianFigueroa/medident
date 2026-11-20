@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/core/models/media-item.dart';
 
 class PostModel {
@@ -17,12 +17,13 @@ class PostModel {
   final String? userPhoto;
   final String? userName;
   final String? clinicId;
+  final bool isPromotion;
 
   // Source (dueño del contenido: user o clinic)
-  final String sourceType;      // "user" | "clinic"
-  final String sourceId;        // uid o clinicId
-  final String sourceName;      // nombre a mostrar
-  final String? sourcePhoto;    // foto a mostrar
+  final String sourceType; // "user" | "clinic"
+  final String sourceId; // uid o clinicId
+  final String sourceName; // nombre a mostrar
+  final String? sourcePhoto; // foto a mostrar
 
   PostModel({
     required this.id,
@@ -40,11 +41,14 @@ class PostModel {
     this.userPhoto,
     this.userName,
     this.clinicId,
+    this.isPromotion = false,
     this.sourceType = 'user',
     this.sourceId = '',
     this.sourceName = '',
     this.sourcePhoto,
-  }) : media = media ?? (imageUrls != null ? MediaItem.fromLegacyUrls(imageUrls) : []);
+  }) : media =
+           media ??
+           (imageUrls != null ? MediaItem.fromLegacyUrls(imageUrls) : []);
 
   factory PostModel.fromJson(Map<String, dynamic> json, String id) {
     DateTime parseDate(dynamic value) {
@@ -65,8 +69,8 @@ class PostModel {
       imageUrls: imageUrls,
       media: MediaItem.fromFirestore(json),
       userId: json['userId'] ?? '',
-      likedBy: json['likedBy'] != null 
-          ? List<String>.from(json['likedBy']) 
+      likedBy: json['likedBy'] != null
+          ? List<String>.from(json['likedBy'])
           : null,
       likesCount: json['likesCount'] ?? 0,
       commentsCount: json['commentsCount'] ?? 0,
@@ -76,6 +80,7 @@ class PostModel {
       userPhoto: json['userPhoto'],
       userName: json['userName'],
       clinicId: json['clinicId'],
+      isPromotion: json['isPromotion'] ?? false,
       sourceType: json['sourceType'] ?? 'user',
       sourceId: json['sourceId'] ?? json['userId'] ?? '',
       sourceName: json['sourceName'] ?? json['userName'] ?? '',
@@ -99,6 +104,7 @@ class PostModel {
     String? userPhoto,
     String? userName,
     String? clinicId,
+    bool? isPromotion,
     String? sourceType,
     String? sourceId,
     String? sourceName,
@@ -120,6 +126,7 @@ class PostModel {
       userPhoto: userPhoto ?? this.userPhoto,
       userName: userName ?? this.userName,
       clinicId: clinicId ?? this.clinicId,
+      isPromotion: isPromotion ?? this.isPromotion,
       sourceType: sourceType ?? this.sourceType,
       sourceId: sourceId ?? this.sourceId,
       sourceName: sourceName ?? this.sourceName,

@@ -54,6 +54,16 @@ class DeliveryProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Estado real del rider guardado en Firestore (riders.isActive).
+      final riderDoc =
+          await FirebaseFirestore.instance.collection('riders').doc(userId).get();
+      final isActive = (riderDoc.data()?['isActive'] ?? false) as bool;
+      _isServiceActive = isActive;
+      if (isActive) {
+        _startPendingStream();
+        _startGpsTracking();
+      }
+
       _activeSub = _service.streamActiveDeliveries(riderId: userId).listen(
         (deliveries) {
           _activeDeliveries = deliveries;
@@ -67,6 +77,12 @@ class DeliveryProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
     }
+
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      userName = (userDoc.data()?['fullName'] ?? '') as String?;
+    } catch (_) {}
 
     _isLoading = false;
     notifyListeners();
@@ -205,7 +221,7 @@ class DeliveryProvider extends ChangeNotifier {
       await _service.acceptDelivery(
         order.id,
         riderId: userId,
-        riderName: 'Domiciliario',
+        riderName: (userName ?? '').isNotEmpty ? userName! : 'Domiciliario',
         riderPhone: '',
       );
       _selectedOrder = order;

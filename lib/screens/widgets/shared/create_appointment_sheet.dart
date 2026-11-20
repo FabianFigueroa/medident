@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:medident/core/models/roles/user_role.dart';
 import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
@@ -37,6 +38,12 @@ class CreateAppointment_Widget extends StatefulWidget {
 
 class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
     with SingleTickerProviderStateMixin {
+  static const _timeSlots = [
+    '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+    '19:00',
+  ];
   final _timeCtrl = TextEditingController(text: '09:00');
   late DateTime _selectedDate;
   String _patientId = '';
@@ -126,8 +133,10 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
       if (_dentistId.isEmpty) {
         try {
           final user = context.read<AuthenticateProvider>().user;
-          _dentistId = user?.uid ?? '';
-          _dentistName = user?.fullName ?? '';
+          if (user != null && user.role != UserRole.employee) {
+            _dentistId = user.uid;
+            _dentistName = user.fullName;
+          }
         } catch (_) {}
       }
     }
@@ -284,6 +293,64 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                   ),
                 ),
               ),
+            if (!widget.isPatientMode) ...[
+              const SizedBox(height: 14),
+              _SectionField(
+                icon: Icons.medical_services_outlined,
+                label: 'Profesional',
+                child: GestureDetector(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => DentistSearchSheet(
+                        clinicId: _clinicId,
+                        onSelected: (id, name, photo) => setState(() {
+                          _dentistId = id;
+                          _dentistName = name;
+                        }),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _dentistName.isNotEmpty
+                          ? const Color(0xFF4F46E5).withOpacity(0.06)
+                          : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _dentistName.isNotEmpty
+                            ? const Color(0xFF4F46E5).withOpacity(0.2)
+                            : Colors.grey[200]!,
+                      ),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(
+                          _dentistName.isNotEmpty
+                              ? _dentistName
+                              : 'Seleccionar profesional...',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: _dentistName.isNotEmpty
+                                ? const Color(0xFF1A1A1A)
+                                : Colors.grey[400],
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.expand_more, size: 20,
+                          color: _dentistName.isNotEmpty
+                              ? const Color(0xFF4F46E5)
+                              : Colors.grey[400]),
+                    ]),
+                  ),
+                ),
+              ),
+            ],
             if (widget.isPatientMode) ...[
               const SizedBox(height: 14),
               _SectionField(
@@ -351,7 +418,7 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                       alignment: Alignment.center,
                       child:
                           const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)))
-                  : _treatments.isEmpty
+                      : _treatments.isEmpty
                       ? TextField(
                           controller: TextEditingController(),
                           decoration: InputDecoration(
@@ -366,10 +433,39 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           ),
                         )
-                      : _TreatmentGrid(
-                          treatments: _treatments,
-                          selected: _selectedTreatment,
-                          onSelect: (t) => setState(() => _selectedTreatment = t),
+                      : DropdownButtonFormField<String>(
+                          initialValue: _selectedTreatment?.id,
+                          isExpanded: true,
+                          icon: Icon(Icons.expand_more,
+                              size: 20, color: Colors.grey[400]),
+                          decoration: InputDecoration(
+                            hintText: 'Selecciona un tratamiento',
+                            hintStyle:
+                                TextStyle(color: Colors.grey[400], fontSize: 14),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                          ),
+                          items: _treatments
+                              .map((t) => DropdownMenuItem<String>(
+                                    value: t.id,
+                                    child: Text(t.name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 14)),
+                                  ))
+                              .toList(),
+                          onChanged: (id) {
+                            final match = _treatments
+                                .where((t) => t.id == id)
+                                .firstOrNull;
+                            if (match != null) {
+                              setState(() => _selectedTreatment = match);
+                            }
+                          },
                         ),
             ),
             const SizedBox(height: 14),
@@ -422,19 +518,32 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                 child: _SectionField(
                   icon: Icons.access_time,
                   label: 'Hora',
-                  child: TextField(
-                    controller: _timeCtrl,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _timeSlots.contains(_timeCtrl.text)
+                        ? _timeCtrl.text
+                        : _timeSlots.first,
+                    isExpanded: true,
+                    icon: Icon(Icons.expand_more,
+                        size: 20, color: Colors.grey[400]),
                     decoration: InputDecoration(
-                      hintText: 'HH:MM',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none),
                       filled: true,
                       fillColor: Colors.grey[50],
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
                     ),
+                    items: _timeSlots
+                        .map((t) => DropdownMenuItem<String>(
+                              value: t,
+                              child: Text(t,
+                                  style: const TextStyle(fontSize: 14)),
+                            ))
+                        .toList(),
+                    onChanged: (t) {
+                      if (t != null) setState(() => _timeCtrl.text = t);
+                    },
                   ),
                 ),
               ),
@@ -487,6 +596,16 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
     if (treatment == null) return;
 
     if (widget.isPatientMode && _dentistName.isEmpty) return;
+    if (_dentistName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona el profesional que atenderá la cita'),
+          backgroundColor: Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
     final pid = _patientId.isNotEmpty
@@ -536,155 +655,6 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
         );
       }
     }
-  }
-}
-
-class _TreatmentGrid extends StatelessWidget {
-  final List<TreatmentModel> treatments;
-  final TreatmentModel? selected;
-  final ValueChanged<TreatmentModel> onSelect;
-
-  const _TreatmentGrid({
-    required this.treatments,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.5,
-      ),
-      itemCount: treatments.length,
-      itemBuilder: (_, i) => _TreatmentCard(
-        treatment: treatments[i],
-        isSelected: selected?.id == treatments[i].id,
-        onTap: () => onSelect(treatments[i]),
-      ),
-    );
-  }
-}
-
-class _TreatmentCard extends StatelessWidget {
-  final TreatmentModel treatment;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _TreatmentCard({
-    required this.treatment,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  Color get _categoryColor {
-    switch (treatment.category) {
-      case 'preventivo':
-        return const Color(0xFF0D9488);
-      case 'estético':
-        return const Color(0xFFDB2777);
-      case 'ortodoncia':
-        return const Color(0xFF7C3AED);
-      case 'endodoncia':
-        return const Color(0xFF2563EB);
-      case 'implante':
-        return const Color(0xFFD97706);
-      default:
-        return const Color(0xFF4F46E5);
-    }
-  }
-
-  IconData get _icon {
-    switch (treatment.iconName) {
-      case 'cleaning':
-        return Icons.cleaning_services;
-      case 'whitening':
-        return Icons.auto_awesome;
-      case 'braces':
-        return Icons.settings;
-      case 'implant':
-        return Icons.construction;
-      case 'root-canal':
-        return Icons.psychology;
-      default:
-        return Icons.medical_services;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _categoryColor;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey[200]!,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected
-              ? [BoxShadow(color: color.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 2))]
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: isSelected ? color : color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(_icon, size: 16, color: isSelected ? Colors.white : color),
-                ),
-                if (isSelected)
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check, size: 12, color: Colors.white),
-                  ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(treatment.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected ? color : Colors.grey[800],
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1),
-                const SizedBox(height: 2),
-                Text('\$${treatment.price.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? color : Colors.grey[500],
-                    )),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

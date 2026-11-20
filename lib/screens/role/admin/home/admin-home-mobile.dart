@@ -4,6 +4,7 @@ import 'package:medident/main_export.dart';
 import 'package:medident/core/models/product-model.dart';
 import 'package:medident/screens/widgets/carousel/promotions-carousel-widget.dart';
 import 'package:medident/screens/widgets/creator/creator-hub-widget.dart';
+import 'package:medident/screens/role/admin/security/admin_turno_requests_screen.dart';
 import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
 
 class AdminHomeMobileWidget extends StatelessWidget {
@@ -34,6 +35,8 @@ class AdminHomeMobileWidget extends StatelessWidget {
             _ReelsSection(provider: provider),
             const SizedBox(height: 16),
             _ModerationCard(provider: provider),
+            const SizedBox(height: 16),
+            _TurnoRequestsCard(),
             const SizedBox(height: 16),
             _ActivityCard(provider: provider),
           ],
@@ -792,6 +795,39 @@ class _ModerationCard extends StatelessWidget {
               ),
             )),
         ],
+      ),
+    );
+  }
+}
+
+// ─── TURNO REQUESTS ─────
+
+class _TurnoRequestsCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminTurnoRequestsScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.calendar_month, color: Color(0xFF4F46E5)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text('Gestionar Solicitudes de Turnos',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }

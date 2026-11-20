@@ -14,7 +14,7 @@ y un asistente virtual inteligente llamado Valeria.
 - **Roles de usuario**: Administrador, Odont�logo, Doctor, Empleado, Paciente
 - **Gesti�n de pacientes**: Fichas cl�nicas, historial de tratamientos, odontogramas
 - **Agenda de citas**: Programaci�n y seguimiento de turnos
-- **Asistente Valeria**: Asistente virtual con IA (modelo local + Grok API)
+- **Asistente Valeria**: Asistente virtual con IA (modelo local + Gemini API)
 - **Responsive Design**: Adaptable a mobile, tablet y desktop
 - **Notificaciones Push**: Integraci�n con Firebase Cloud Messaging
 - **Mapas y entregas**: Seguimiento de entregas con OSRM
@@ -25,7 +25,7 @@ y un asistente virtual inteligente llamado Valeria.
 - **Backend**: Firebase (Auth, Firestore, Storage, Realtime DB, Messaging)
 - **Estado**: Provider + ChangeNotifier
 - **IA Local**: Motor NLP con similitud coseno (ValeriaEngine)
-- **IA Cloud**: Grok API (xAI) / Gemini (Cloud Functions)
+- **IA Cloud**: Google Gemini API (tier gratuito de AI Studio, key vía --dart-define)
 - **Mapas**: FlutterMap + OSRM
 - **Animaciones**: Rive, Lottie
 
@@ -74,6 +74,10 @@ lib/
 | iOS      | 1:435865924056:ios:ac3dfd486d843c5e6282ad |
 | macOS    | 1:435865924056:ios:ac3dfd486d843c5e6282ad |
 | Windows  | 1:435865924056:web:373480380257c5816282ad |
+
+## Reglas de oro
+
+Las reglas de negocio no negociables del proyecto están documentadas en [REGLAS_DE_ORO.md](REGLAS_DE_ORO.md). Entre ellas, la separación entre el perfil personal del usuario y el perfil de la clínica.
 
 ## Licencia
 

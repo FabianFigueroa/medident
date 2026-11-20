@@ -303,16 +303,16 @@ class ValeriaProvider extends ChangeNotifier {
     String? intent;
     String response;
 
-    final grokKey = ValeriaConfig.grokApiKey;
-    if (grokKey != null && grokKey.isNotEmpty) {
-      final grokResult = await _callGrok(text);
-      if (grokResult != null) {
-        intent = grokResult['intent'] as String?;
-        response = grokResult['response'] as String? ?? '';
+    final apiKey = ValeriaConfig.geminiApiKey;
+    if (apiKey != null && apiKey.isNotEmpty) {
+      final aiResult = await _callGemini(text);
+      if (aiResult != null) {
+        intent = aiResult['intent'] as String?;
+        response = aiResult['response'] as String? ?? '';
         _lastMatchedIntent = intent;
-        final shouldNavigate = grokResult['should_navigate'] == true;
+        final shouldNavigate = aiResult['should_navigate'] == true;
         if (shouldNavigate) {
-          final target = grokResult['navigation_target'] as String?;
+          final target = aiResult['navigation_target'] as String?;
           if (target != null) {
             _tools['navigate']?.call({'screen': target});
           }
@@ -327,7 +327,7 @@ class ValeriaProvider extends ChangeNotifier {
           await _executeTool(intent);
         }
       } else {
-        response = 'Lo siento, no pude contactar a Grok en este momento.';
+        response = 'Lo siento, no pude contactar al servicio de IA en este momento.';
       }
     } else if (ValeriaConfig.useLocalFallback) {
       _ensureEngineInitialized();
@@ -360,7 +360,7 @@ class ValeriaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>?> _callGrok(String text) async {
+  Future<Map<String, dynamic>?> _callGemini(String text) async {
     try {
       final historyCount = (_messages.length - 1).clamp(0, 20);
       final messages = [
@@ -373,23 +373,23 @@ class ValeriaProvider extends ChangeNotifier {
       ];
 
       final body = jsonEncode({
-        'model': ValeriaConfig.grokModel,
+        'model': ValeriaConfig.geminiModel,
         'messages': messages,
         'temperature': 0.7,
         'max_tokens': 300,
       });
 
       final response = await http.post(
-        Uri.parse(ValeriaConfig.grokEndpoint),
+        Uri.parse(ValeriaConfig.geminiEndpoint),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${ValeriaConfig.grokApiKey}',
+          'Authorization': 'Bearer ${ValeriaConfig.geminiApiKey}',
         },
         body: body,
       ).timeout(Duration(milliseconds: ValeriaConfig.timeoutMs));
 
       if (response.statusCode != 200) {
-        debugPrint('Grok error ${response.statusCode}: ${response.body}');
+        debugPrint('Gemini error ${response.statusCode}: ${response.body}');
         return null;
       }
 
@@ -420,7 +420,7 @@ class ValeriaProvider extends ChangeNotifier {
           'navigation_target': _navigationTarget(detectedIntent),
       };
     } catch (e) {
-      debugPrint('Grok call error: $e');
+      debugPrint('Gemini call error: $e');
       return null;
     }
   }

@@ -2,7 +2,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:image_cropper/image_cropper.dart';
 
 class FilterPreset {
   final String name;
@@ -227,7 +226,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _filterAnimCtrl = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -275,7 +274,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
     setState(() => _saving = true);
     try {
       final boundary = _repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3);
+      final image = await boundary.toImage(pixelRatio: 2);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData != null && mounted) {
         Navigator.pop(context, byteData.buffer.asUint8List());
@@ -288,26 +287,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
       }
     } finally {
       if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _crop() async {
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: widget.imageBytes as String? ?? '',
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Recortar',
-          toolbarColor: Colors.black,
-          toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.original,
-          lockAspectRatio: false,
-        ),
-        IOSUiSettings(title: 'Recortar'),
-      ],
-    );
-    if (cropped != null && mounted) {
-      final bytes = await cropped.readAsBytes();
-      Navigator.pop(context, bytes);
     }
   }
 
@@ -393,7 +372,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
                     Tab(text: 'Filtros'),
                     Tab(text: 'Ajustar'),
                     Tab(text: 'Texto'),
-                    Tab(text: 'Recortar'),
                   ],
                 ),
                 SizedBox(
@@ -404,7 +382,6 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
                       _buildFiltersTab(),
                       _buildAdjustTab(),
                       _buildTextTab(),
-                      _buildCropTab(),
                     ],
                   ),
                 ),
@@ -664,28 +641,4 @@ class _ImageEditorScreenState extends State<ImageEditorScreen>
     );
   }
 
-  Widget _buildCropTab() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.crop, size: 48, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Text('Ajusta el recorte de tu imagen', style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _crop,
-            icon: const Icon(Icons.crop, size: 18),
-            label: const Text('Abrir recortador'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

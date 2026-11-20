@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:medident/core/models/clinic-model.dart';
 import 'package:medident/core/models/user-model.dart';
 import 'package:medident/core/models/treatment-model.dart';
-import 'package:medident/screens/role/dentist/profile/widgets/dentist-counter-widget.dart';
+import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/screens/widgets/avatar/global_avatar_widget.dart';
 import 'package:medident/screens/shared/promotion-detail-screen.dart';
 import 'package:medident/screens/role/dentist/clinic/treatments-screen.dart';
 
 class Clinic_Header_Widget extends StatelessWidget {
-  final UserModel userModel;
+  final UserModel? userModel;
+  final ClinicModel? clinic;
   final bool isOwner;
   final VoidCallback? onEditProfilePressed;
+  final VoidCallback? onCreateContentPressed;
   final List<Map<String, dynamic>> promotions;
   final List<TreatmentModel> treatments;
   final String clinicId;
@@ -19,16 +25,25 @@ class Clinic_Header_Widget extends StatelessWidget {
   const Clinic_Header_Widget({
     super.key,
     required this.userModel,
+    this.clinic,
     this.isOwner = false,
     this.onEditProfilePressed,
+    this.onCreateContentPressed,
     required this.promotions,
     this.treatments = const [],
     this.clinicId = '',
   });
 
-  String get _avatarUrl => userModel.imageUrl != null && userModel.imageUrl!.isNotEmpty 
-      ? userModel.imageUrl!   
-      : '';
+  // Regla de oro 1: la cabecera de Clinic solo usa identidad de la clínica.
+  // Nunca cae al nombre ni a la foto del usuario dueño.
+  String get _avatarUrl {
+    final logo = clinic?.logoUrl;
+    return (logo != null && logo.isNotEmpty) ? logo : '';
+  }
+
+  String get _clinicName => (clinic?.name.isNotEmpty ?? false)
+      ? clinic!.name
+      : 'Clínica';
 
   String _getPromotionImageUrl(Map<String, dynamic> promo) {
     final imageUrls = promo['imageUrls'] as List<dynamic>?;
@@ -172,7 +187,7 @@ class Clinic_Header_Widget extends StatelessWidget {
       builder: (_) => PromotionDetailScreen(
         promoId: promoId,
         clinicId: clinicId,
-        clinicName: userModel.userName,
+        clinicName: _clinicName,
         isOwner: isOwner,
       ),
     ));
@@ -279,6 +294,20 @@ class Clinic_Header_Widget extends StatelessWidget {
     ));
   }
 
+  String _clinicSubtitle() {
+    final parts = <String>[];
+    final address = clinic?.address;
+    final phone = clinic?.phone;
+    if (address != null && address.isNotEmpty) parts.add(address);
+    if (phone != null && phone.isNotEmpty) parts.add(phone);
+    if (parts.isEmpty) {
+      final website = clinic?.website;
+      if (website != null && website.isNotEmpty) return website;
+      return 'Perfil de clínica';
+    }
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> promotionsToShow = promotions.take(5).toList();
@@ -327,12 +356,10 @@ class Clinic_Header_Widget extends StatelessWidget {
                   top: 210,
                   left: 15,
                   right: 15,
-                  child: Dentist_Counter_Widget(
-                    currentUser: userModel,
-                    isFollowing: false,
-                    onFollowPressed: null,
+                  child: _ClinicCounterBar(
+                    isOwner: isOwner,
                     onEditProfilePressed: onEditProfilePressed,
-                    isOwnProfile: isOwner,
+                    onCreateContentPressed: onCreateContentPressed,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -354,9 +381,11 @@ class Clinic_Header_Widget extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _buildStats(
-                            username: "${userModel.userName}",
-                            profession: userModel.speciality ?? userModel.role.displayName,
-                            specialty: 'www.doctormontiel.com',
+                            username: _clinicName,
+                            profession: (clinic?.description?.isNotEmpty ?? false)
+                                ? clinic!.description!
+                                : 'Clínica',
+                            specialty: _clinicSubtitle(),
                           ),
                         ),
                       ],
@@ -370,6 +399,239 @@ class Clinic_Header_Widget extends StatelessWidget {
             _buildFeaturedTreatments(context),
         ],
       ),
+    );
+  }
+}
+
+class _ClinicCounterBar extends StatelessWidget {
+  final bool isOwner;
+  final VoidCallback? onEditProfilePressed;
+  final VoidCallback? onCreateContentPressed;
+
+  const _ClinicCounterBar({
+    required this.isOwner,
+    this.onEditProfilePressed,
+    this.onCreateContentPressed,
+  });
+
+  void _showClinicQr(BuildContext context) {
+    final clinic = context.read<DentistClinicProvider>().clinic;
+    final apiKey = clinic?.apiKey ?? '';
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              clinic?.name.isNotEmpty == true ? clinic!.name : 'Clínica',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Código QR de la clínica',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 20),
+            if (apiKey.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('La clínica aún no tiene un código QR generado.'),
+              )
+            else
+              QrImageView(
+                data: apiKey,
+                size: 220,
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.all(12),
+              ),
+            const SizedBox(height: 16),
+            if (apiKey.isNotEmpty)
+              SelectableText(
+                apiKey,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  letterSpacing: 1,
+                ),
+              ),
+            const SizedBox(height: 16),
+            if (apiKey.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: apiKey));
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    const SnackBar(content: Text('Código copiado')),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 16),
+                label: const Text('Copiar código'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cp = context.watch<DentistClinicProvider>();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F172A),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(
+              child: _ClinicCounter(
+                label: 'Pacientes',
+                count: cp.patientsCount,
+              ),
+            ),
+            Expanded(
+              child: _ClinicCounter(
+                label: 'Equipo',
+                count: cp.employeesCount,
+              ),
+            ),
+            Expanded(
+              child: _ClinicCounter(
+                label: 'Seguidores',
+                count: cp.followersCount,
+              ),
+            ),
+            const SizedBox(
+              height: 35,
+              child: VerticalDivider(
+                color: Colors.grey,
+                thickness: 0.5,
+                width: 0.8,
+              ),
+            ),
+            const SizedBox(width: 16),
+            if (isOwner)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 36,
+                    width: 36,
+                    child: IconButton(
+                      tooltip: 'Código QR de la clínica',
+                      padding: EdgeInsets.zero,
+                      onPressed: () => _showClinicQr(context),
+                      icon: const Icon(Icons.qr_code_2_rounded, size: 18, color: Color(0xFF0EA5A4)),
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5A4).withOpacity(0.08),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    height: 36,
+                    width: 36,
+                    child: IconButton(
+                      tooltip: 'Editar clínica',
+                      padding: EdgeInsets.zero,
+                      onPressed: onEditProfilePressed,
+                      icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0EA5A4)),
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5A4).withOpacity(0.08),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    onPressed: onCreateContentPressed,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0EA5A4),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_box_rounded, size: 16),
+                    label: const Text(
+                      'Crear contenido',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5A4).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  cp.canManageAgenda ? 'Gestión' : 'Miembro',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0EA5A4),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClinicCounter extends StatelessWidget {
+  final String label;
+  final int count;
+
+  const _ClinicCounter({required this.label, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$count',
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+        ),
+      ],
     );
   }
 }

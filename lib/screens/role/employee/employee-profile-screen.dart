@@ -2,6 +2,7 @@
 import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
+import 'package:medident/screens/widgets/shared/profile-clinic-card.dart';
 
 class EmployeeProfileScreen extends StatefulWidget {
   const EmployeeProfileScreen({super.key});
@@ -123,6 +124,7 @@ class _ProfileContent extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               children: [
+                if (user != null) ProfileClinicCard.fromUser(user),
                 _buildOptionCard(
                   icon: Icons.person_outline,
                   title: 'Editar Perfil',

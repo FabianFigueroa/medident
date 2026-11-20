@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +6,7 @@ import 'package:medident/core/models/jobs-model.dart';
 import 'package:medident/core/models/user-model.dart';
 import 'package:medident/core/models/media-item.dart';
 import 'package:medident/core/services/dentist/dentist-home-services.dart';
+import 'package:medident/core/services/clinic-follow-service.dart';
 import 'package:medident/core/services/cache/home-cache-service.dart';
 import 'package:medident/core/services/cache/user-cache-service.dart';
 import 'package:medident/core/models/post-model.dart';
@@ -24,8 +25,12 @@ class DentistHomeProvider with ChangeNotifier {
   String? _clinicId;
 
   List<PostModel> _posts = [];
+  List<PostModel> _basePosts = [];
+  List<PostModel> _followedClinicPosts = [];
+  final ClinicFollowService _clinicFollowService = ClinicFollowService();
   List<StoryModel> _stories = [];
   List<ProductModel> _products = [];
+  List<PostModel> _clinicUploads = [];
   List<JobModel> _jobs = [];
   List<UserModel> _suggestedUsers = [];
   List<ProductModel> _myPromotions = [];
@@ -47,9 +52,9 @@ class DentistHomeProvider with ChangeNotifier {
     required DentistHomeService service,
     required String userId,
     String? clinicId,
-  })  : _service = service,
-        _userId = userId,
-        _clinicId = clinicId;
+  }) : _service = service,
+       _userId = userId,
+       _clinicId = clinicId;
 
   bool _isLoading = true;
   bool _isDataLoading = false;
@@ -67,13 +72,67 @@ class DentistHomeProvider with ChangeNotifier {
 
   // Streams de escucha en tiempo real
   StreamSubscription<QuerySnapshot>? _postsSub;
+  StreamSubscription<List<PostModel>>? _followedPostsSub;
+  StreamSubscription<List<PostModel>>? _clinicUploadsSub;
   StreamSubscription<QuerySnapshot>? _storiesSub;
   StreamSubscription<DocumentSnapshot>? _userSub;
 
   List<PostModel> get posts => _posts;
   List<StoryModel> get stories => _stories;
   List<ProductModel> get products => _products;
+  List<PostModel> get clinicUploads => _clinicUploads;
   List<JobModel> get jobs => _jobs;
+
+  List<ProductModel> get carouselProducts {
+    final merged = <String, ProductModel>{};
+    for (final promo in _products) {
+      merged['promo_${promo.id}'] = promo;
+    }
+    for (final post in _clinicUploads) {
+      final product = _postToCarouselProduct(post);
+      merged.putIfAbsent(product.id, () => product);
+    }
+    final list = merged.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  ProductModel _postToCarouselProduct(PostModel post) {
+    final images = post.media
+        .where((m) => m.isImage && m.url.isNotEmpty)
+        .map((m) => m.url)
+        .toList();
+    final videos = post.media.where((m) => m.isVideo).toList();
+    final video = videos.isNotEmpty ? videos.first : null;
+    final imageUrls = images.isNotEmpty
+        ? images
+        : (video?.thumbnailUrl != null && video!.thumbnailUrl!.isNotEmpty
+              ? [video.thumbnailUrl!]
+              : <String>[]);
+    final title = post.title.trim().isNotEmpty
+        ? post.title.trim()
+        : (post.sourceName.trim().isNotEmpty
+              ? post.sourceName.trim()
+              : 'Publicación de clínica');
+    return ProductModel(
+      id: 'clinicpost_${post.id}',
+      name: title,
+      description: post.description,
+      price: 0,
+      imageUrls: imageUrls,
+      videoUrl: video?.url,
+      category: 'Publicación de clínica',
+      clinicId: post.clinicId ?? post.sourceId,
+      clinicName: post.sourceName.isNotEmpty ? post.sourceName : post.userName,
+      clinicLogo: post.sourcePhoto ?? post.userPhoto,
+      source: 'clinic',
+      sourceName: post.sourceName,
+      sourcePhoto: post.sourcePhoto,
+      createdAt: post.createdAt,
+      isActive: true,
+    );
+  }
+
   List<UserModel> get suggested_Friends => _suggestedUsers;
   List<ProductModel> get myPromotions => _myPromotions;
   List<TurnoModel> get turnos => _turnos;
@@ -148,35 +207,83 @@ class DentistHomeProvider with ChangeNotifier {
 
   void _cancelSubscriptions() {
     _postsSub?.cancel();
+    _followedPostsSub?.cancel();
+    _clinicUploadsSub?.cancel();
     _storiesSub?.cancel();
     _userSub?.cancel();
   }
 
+  void _listenClinicUploads() {
+    _clinicUploadsSub?.cancel();
+    _clinicUploadsSub = _service.streamClinicUploads().listen((uploads) {
+      if (_isDisposed) return;
+      _clinicUploads = uploads;
+      notifyListeners();
+    }, onError: (e) => debugPrint('Error streaming clinic uploads: $e'));
+  }
+
+  /// Combina los posts propios/del feed con los de las clínicas seguidas,
+  /// deduplicando por id y ordenando por fecha descendente.
+  void _rebuildPosts() {
+    final byId = <String, PostModel>{};
+    for (final p in _basePosts) {
+      byId[p.id] = p;
+    }
+    for (final p in _followedClinicPosts) {
+      byId[p.id] = p;
+    }
+    _posts = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  /// Suscripción a los posts de las clínicas que el usuario sigue.
+  void _subscribeToFollowedClinicPosts() {
+    _followedPostsSub?.cancel();
+    if (_userId.isEmpty) return;
+    _followedPostsSub = _clinicFollowService
+        .streamFollowedClinicPosts(_userId)
+        .listen(
+          (posts) {
+            _followedClinicPosts = posts;
+            _rebuildPosts();
+            if (mounted) notifyListeners();
+          },
+          onError: (e) {
+            debugPrint('Followed clinic posts stream error: $e');
+          },
+        );
+  }
+
   void _subscribeToPosts() {
     _postsSub?.cancel();
-    _postsSub = _service.streamPosts(clinicId: _clinicId).listen(
-      (snap) {
-        final freshPosts = snap.docs.map((d) {
-          final data = d.data();
-          data['id'] = d.id;
-          return PostModel.fromJson(data, d.id);
-        }).toList();
+    _postsSub = _service
+        .streamPosts(clinicId: _clinicId)
+        .listen(
+          (snap) {
+            final freshPosts = snap.docs.map((d) {
+              final data = d.data();
+              data['id'] = d.id;
+              return PostModel.fromJson(data, d.id);
+            }).toList();
 
-        if (!_hasPaginatedBeyond) {
-          _posts = freshPosts;
-          _lastPostDocument = snap.docs.isNotEmpty ? snap.docs.last : null;
-          _lastStreamSnapshot = snap.docs.isNotEmpty ? snap.docs.last : null;
-        }
-        _hasMorePosts = freshPosts.length >= 10;
-        _isLoading = false;
-        if (mounted) notifyListeners();
-      },
-      onError: (e) {
-        debugPrint('Posts stream error: $e');
-        _isLoading = false;
-        if (mounted) notifyListeners();
-      },
-    );
+            if (!_hasPaginatedBeyond) {
+              _basePosts = freshPosts;
+              _lastPostDocument = snap.docs.isNotEmpty ? snap.docs.last : null;
+              _lastStreamSnapshot = snap.docs.isNotEmpty
+                  ? snap.docs.last
+                  : null;
+            }
+            _rebuildPosts();
+            _hasMorePosts = freshPosts.length >= 10;
+            _isLoading = false;
+            if (mounted) notifyListeners();
+          },
+          onError: (e) {
+            debugPrint('Posts stream error: $e');
+            _isLoading = false;
+            if (mounted) notifyListeners();
+          },
+        );
   }
 
   // ── Suscripción en tiempo real a stories ─────────────────
@@ -186,10 +293,13 @@ class DentistHomeProvider with ChangeNotifier {
       (snap) {
         final allStories = snap.docs
             .map((d) => StoryModel.fromJson(d.data(), d.id))
+            .where((s) => s.isActive && !s.isExpired)
             .toList();
         _stories = allStories.where((s) => s.userId != _userId).toList();
+        _lastStoryDocument = snap.docs.isNotEmpty ? snap.docs.last : null;
         _isLoadingStories = false;
         _hasMoreStories = allStories.length >= 20;
+        _deleteExpiredStories(snap.docs);
         if (mounted) notifyListeners();
       },
       onError: (e) {
@@ -198,6 +308,29 @@ class DentistHomeProvider with ChangeNotifier {
         if (mounted) notifyListeners();
       },
     );
+  }
+
+  void _deleteExpiredStories(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final now = DateTime.now();
+    for (final doc in docs) {
+      final data = doc.data();
+      final expires = (data['expiresAt'] as Timestamp?)?.toDate();
+      final created = (data['createdAt'] as Timestamp?)?.toDate();
+      final expired = expires != null
+          ? expires.isBefore(now)
+          : (created != null &&
+                now.difference(created) > const Duration(hours: 24));
+      if (expired) {
+        _service
+            .deleteStory(doc.id)
+            .then(
+              (_) {},
+              onError: (e) => debugPrint('deleteExpiredStory ${doc.id}: $e'),
+            );
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -209,6 +342,8 @@ class DentistHomeProvider with ChangeNotifier {
     if (force) {
       _hasLoadedInitialData = false;
       _posts.clear();
+      _basePosts.clear();
+      _followedClinicPosts.clear();
       _stories.clear();
       _suggestedUsers.clear();
       _currentUserStories.clear();
@@ -237,8 +372,12 @@ class DentistHomeProvider with ChangeNotifier {
 
       final fbUser = FirebaseAuth.instance.currentUser;
       if (fbUser != null) {
-        _currentUserName = fbUser.displayName ?? fbUser.email ?? '';
-        _currentUserPhoto = fbUser.photoURL ?? '';
+        if (_currentUserName.isEmpty) {
+          _currentUserName = fbUser.displayName ?? '';
+        }
+        if (_currentUserPhoto.isEmpty) {
+          _currentUserPhoto = fbUser.photoURL ?? '';
+        }
       }
 
       // 1) Instant first paint from local cache
@@ -251,10 +390,29 @@ class DentistHomeProvider with ChangeNotifier {
 
       // 2) Streams en tiempo real (Firestore cache-first → server)
       _subscribeToPosts();
+      _subscribeToFollowedClinicPosts();
       _subscribeToStories();
+      _service.purgeExpiredStories();
 
-      // 3) Lazy: secondary data solo cuando el widget lo pida
-      unawaited(_loadSecondaryData());
+      // Seguridad: si Firestore no emite (offline/permisos), no dejar el home
+      // atrapado en el shimmer de carga inicial para siempre.
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 8), () {
+          if (_isDisposed || !_isLoading) return;
+          _isLoading = false;
+          _isLoadingStories = false;
+          notifyListeners();
+        }),
+      );
+
+      // 3) Lazy: secondary data solo cuando el widget lo pida y ya con el
+      // primer frame pintado (patrón tenderos: no competir por el socket).
+      unawaited(
+        Future<void>.delayed(
+          const Duration(milliseconds: 500),
+          _loadSecondaryData,
+        ),
+      );
 
       _hasLoadedInitialData = true;
       _isDataLoading = false;
@@ -275,9 +433,13 @@ class DentistHomeProvider with ChangeNotifier {
       if (cached == null) return;
       _currentUserName = cached.userName;
       _currentUserPhoto = cached.userPhoto;
-      if (_posts.isEmpty) _posts = cached.posts;
+      if (_posts.isEmpty) {
+        _basePosts = cached.posts;
+        _rebuildPosts();
+      }
       if (_stories.isEmpty) _stories = cached.stories;
-      if (_currentUserStories.isEmpty) _currentUserStories = cached.currentUserStories;
+      if (_currentUserStories.isEmpty)
+        _currentUserStories = cached.currentUserStories;
       if (_suggestedUsers.isEmpty) _suggestedUsers = cached.suggestedUsers;
       if (_products.isEmpty) _products = cached.products;
       if (_jobs.isEmpty) _jobs = cached.jobs;
@@ -295,13 +457,16 @@ class DentistHomeProvider with ChangeNotifier {
       final criticalTasks = await Future.wait([
         _service.getMyStories(_userId),
         _service.getGlobalPromotions(),
+        _service.getClinicUploads(),
         _service.getSuggested_Friends(limit: 5),
       ], eagerError: false);
 
       if (!_isDisposed) {
         _currentUserStories = criticalTasks[0] as List<StoryModel>;
         _products = criticalTasks[1] as List<ProductModel>;
-        _suggestedUsers = criticalTasks[2] as List<UserModel>;
+        _clinicUploads = criticalTasks[2] as List<PostModel>;
+        _suggestedUsers = criticalTasks[3] as List<UserModel>;
+        _listenClinicUploads();
         _isLoading = false;
         _isLoadingStories = false;
         notifyListeners();
@@ -352,7 +517,8 @@ class DentistHomeProvider with ChangeNotifier {
       if (newPosts.isEmpty) {
         _hasMorePosts = false;
       } else {
-        _posts.addAll(newPosts);
+        _basePosts.addAll(newPosts);
+        _rebuildPosts();
         _lastPostDocument = result['lastDocument'];
       }
     } catch (e) {
@@ -365,7 +531,8 @@ class DentistHomeProvider with ChangeNotifier {
 
   // ── Paginación de stories ────────────────────────────
   Future<void> loadMoreStories() async {
-    if (_isLoadingMore || !_hasMoreStories || _lastStoryDocument == null) return;
+    if (_isLoadingMore || !_hasMoreStories || _lastStoryDocument == null)
+      return;
     _isLoadingMore = true;
     notifyListeners();
     try {
@@ -373,7 +540,9 @@ class DentistHomeProvider with ChangeNotifier {
         limit: 20,
         lastDoc: _lastStoryDocument,
       );
-      final newStories = result['stories'] as List<StoryModel>;
+      final newStories = (result['stories'] as List<StoryModel>)
+          .where((s) => s.userId != _userId)
+          .toList();
       if (newStories.isEmpty) {
         _hasMoreStories = false;
       } else {
@@ -493,7 +662,10 @@ class DentistHomeProvider with ChangeNotifier {
   Future<void> loadTreatments() async {
     if (_treatments.isNotEmpty) return;
     try {
-      _treatments = await _service.getTreatments(limit: 10);
+      _treatments = await _service.getTreatments(
+        limit: 10,
+        clinicId: _clinicId,
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading treatments: $e');
@@ -504,8 +676,10 @@ class DentistHomeProvider with ChangeNotifier {
     if (_appointments.isNotEmpty) return;
     if (_userId.isEmpty) return;
     try {
-      _appointments =
-          await _service.getAppointments(dentistId: _userId, limit: 10);
+      _appointments = await _service.getAppointments(
+        dentistId: _userId,
+        limit: 10,
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading appointments: $e');
@@ -516,8 +690,10 @@ class DentistHomeProvider with ChangeNotifier {
     if (_odontograms.isNotEmpty) return;
     if (_userId.isEmpty) return;
     try {
-      _odontograms =
-          await _service.getOdontograms(dentistId: _userId, limit: 10);
+      _odontograms = await _service.getOdontograms(
+        dentistId: _userId,
+        limit: 10,
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading odontograms: $e');
@@ -721,8 +897,9 @@ class DentistHomeProvider with ChangeNotifier {
       await _service.addComment(postId, _userId, content);
       final i = _posts.indexWhere((p) => p.id == postId);
       if (i != -1) {
-        _posts[i] =
-            _posts[i].copyWith(commentsCount: _posts[i].commentsCount + 1);
+        _posts[i] = _posts[i].copyWith(
+          commentsCount: _posts[i].commentsCount + 1,
+        );
         notifyListeners();
       }
     } catch (e) {
@@ -961,26 +1138,63 @@ class DentistHomeProvider with ChangeNotifier {
         sourceName: sourceName,
         sourcePhoto: sourcePhoto,
       );
-      final clinicalSourceName = sourceType == 'clinical' ? sourceName ?? sourceId : null;
+      final clinicalSourceName = sourceType == 'clinical'
+          ? sourceName ?? sourceId
+          : null;
       final newStory = StoryModel(
         id: id,
         userId: _userId,
         userName: clinicalSourceName ?? _currentUserName,
-        userPhoto: sourcePhoto ?? (_currentUserPhoto.isNotEmpty ? _currentUserPhoto : null),
+        userPhoto:
+            sourcePhoto ??
+            (_currentUserPhoto.isNotEmpty ? _currentUserPhoto : null),
         imageUrl: imageUrl,
         isActive: true,
         createdAt: DateTime.now(),
+        expiresAt: DateTime.now().add(const Duration(hours: 24)),
         sourceType: sourceType ?? 'user',
         sourceId: sourceId ?? _userId,
         sourceName: clinicalSourceName ?? _currentUserName,
         sourcePhoto: sourcePhoto ?? _currentUserPhoto,
       );
-      _stories.insert(0, newStory);
       _currentUserStories.insert(0, newStory);
       notifyListeners();
       return id;
     } catch (e) {
       debugPrint('Error creating story: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteStory(String storyId) async {
+    try {
+      await _service.deleteStory(storyId);
+      _stories.removeWhere((s) => s.id == storyId);
+      _currentUserStories.removeWhere((s) => s.id == storyId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting story: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateStoryText(String storyId, String? text) async {
+    try {
+      await _service.updateStoryText(storyId, text);
+      final newText = text ?? '';
+      void apply(List<StoryModel> list) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].id == storyId) {
+            list[i] = list[i].copyWith(text: newText);
+          }
+        }
+      }
+
+      apply(_stories);
+      apply(_currentUserStories);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error updating story: $e');
       rethrow;
     }
   }
@@ -1003,7 +1217,9 @@ class DentistHomeProvider with ChangeNotifier {
   }
 
   Future<void> updateAppointmentStatus(
-      String appointmentId, String status) async {
+    String appointmentId,
+    String status,
+  ) async {
     try {
       await _service.updateAppointmentStatus(appointmentId, status);
       final i = _appointments.indexWhere((a) => a.id == appointmentId);
@@ -1030,10 +1246,12 @@ class DentistHomeProvider with ChangeNotifier {
 
   List<AppointmentModel> getAppointmentsByDate(DateTime date) {
     return _appointments
-        .where((a) =>
-            a.date.year == date.year &&
-            a.date.month == date.month &&
-            a.date.day == date.day)
+        .where(
+          (a) =>
+              a.date.year == date.year &&
+              a.date.month == date.month &&
+              a.date.day == date.day,
+        )
         .toList();
   }
 
@@ -1103,8 +1321,11 @@ class DentistHomeProvider with ChangeNotifier {
 
   Future<void> refreshAll() async {
     _posts.clear();
+    _basePosts.clear();
+    _followedClinicPosts.clear();
     _stories.clear();
     _products.clear();
+    _clinicUploads.clear();
     _jobs.clear();
     _suggestedUsers.clear();
     _myPromotions.clear();
@@ -1114,6 +1335,18 @@ class DentistHomeProvider with ChangeNotifier {
     _hasMorePosts = true;
     _hasMoreStories = true;
     await loadInitialData(force: true);
+    await _loadClinicUploads();
+  }
+
+  Future<void> _loadClinicUploads() async {
+    try {
+      final uploads = await _service.getClinicUploads();
+      if (_isDisposed) return;
+      _clinicUploads = uploads;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading clinic uploads: $e');
+    }
   }
 
   Future<void> _saveToCache() async {
@@ -1123,7 +1356,7 @@ class DentistHomeProvider with ChangeNotifier {
         data: HomeCacheData(
           userName: _currentUserName,
           userPhoto: _currentUserPhoto,
-          posts: _posts,
+          posts: _basePosts,
           stories: _stories,
           currentUserStories: _currentUserStories,
           suggestedUsers: _suggestedUsers,

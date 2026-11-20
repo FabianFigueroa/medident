@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 import 'package:medident/core/models/story-model.dart';
 import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
 
-const _storyDuration = Duration(seconds: 5);
+const _storyDuration = Duration(seconds: 30);
 
 class StoryViewerScreen extends StatefulWidget {
   final List<StoryModel> stories;
@@ -30,6 +31,7 @@ class StoryViewerScreen extends StatefulWidget {
 class _StoryViewerScreenState extends State<StoryViewerScreen>
     with SingleTickerProviderStateMixin {
   late PageController _pageController;
+  late List<StoryModel> _stories;
   int _currentIndex = 0;
   bool _isPaused = false;
   Timer? _storyTimer;
@@ -45,8 +47,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
+    _stories = List<StoryModel>.from(widget.stories);
+    final maxIndex = _stories.isEmpty ? 0 : _stories.length - 1;
+    _currentIndex = widget.initialIndex.clamp(0, maxIndex);
+    _pageController = PageController(initialPage: _currentIndex);
     _likeAnimController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -81,8 +85,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     _storyTimer?.cancel();
     _progress = 0.0;
     _isPaused = false;
+    final duration = _currentIndex < _stories.length &&
+            _isVideoUrl(_stories[_currentIndex].imageUrl)
+        ? const Duration(seconds: 60)
+        : _storyDuration;
     const tickDuration = Duration(milliseconds: 50);
-    final totalTicks = _storyDuration.inMilliseconds / tickDuration.inMilliseconds;
+    final totalTicks = duration.inMilliseconds / tickDuration.inMilliseconds;
     int ticks = 0;
 
     _storyTimer = Timer.periodic(tickDuration, (timer) {
@@ -99,7 +107,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   void _goToNextStory() {
-    if (_currentIndex < widget.stories.length - 1) {
+    if (_currentIndex < _stories.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -114,9 +122,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   void _resumeTimer() => setState(() => _isPaused = false);
 
   Future<void> _loadStoryData() async {
-    if (widget.stories.isEmpty || _currentIndex >= widget.stories.length) return;
+    if (_stories.isEmpty || _currentIndex >= _stories.length) return;
 
-    final story = widget.stories[_currentIndex];
+    final story = _stories[_currentIndex];
     setState(() {
       _isLiked = story.likedBy.contains(widget.currentUserId);
     });
@@ -140,7 +148,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   Future<void> _toggleLike() async {
-    final story = widget.stories[_currentIndex];
+    final story = _stories[_currentIndex];
     final wasLiked = _isLiked;
     final provider = _getProvider();
 
@@ -169,7 +177,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
-    final story = widget.stories[_currentIndex];
+    final story = _stories[_currentIndex];
     final provider = _getProvider();
 
     _commentController.clear();
@@ -184,6 +192,159 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           SnackBar(content: Text('Error: $e')),
         );
       }
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _showStoryOptions(StoryModel story) async {
+    _pauseTimer();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1F2937),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: Colors.white),
+              title: const Text('Editar texto',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              title: const Text('Eliminar historia',
+                  style: TextStyle(color: Colors.redAccent)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'edit') {
+      await _editCurrentStory();
+    } else if (action == 'delete') {
+      await _deleteCurrentStory();
+    } else {
+      _resumeTimer();
+    }
+  }
+
+  Future<void> _editCurrentStory() async {
+    if (_currentIndex >= _stories.length) return;
+    final story = _stories[_currentIndex];
+    final controller = TextEditingController(text: story.text ?? '');
+    _pauseTimer();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar texto'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Escribe el texto de tu historia',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null) {
+      _resumeTimer();
+      return;
+    }
+    try {
+      await _getProvider().updateStoryText(story.id, result.trim());
+      if (!mounted) return;
+      setState(() {
+        _stories[_currentIndex] =
+            story.copyWith(text: result.trim());
+      });
+      _showSnack('Historia actualizada');
+    } catch (e) {
+      _showSnack('No se pudo actualizar: $e');
+    }
+    _resumeTimer();
+  }
+
+  Future<void> _deleteCurrentStory() async {
+    if (_currentIndex >= _stories.length) return;
+    final story = _stories[_currentIndex];
+    _pauseTimer();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar historia'),
+        content: const Text('Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      _resumeTimer();
+      return;
+    }
+    try {
+      await _getProvider().deleteStory(story.id);
+      if (!mounted) return;
+      if (_stories.length <= 1) {
+        Navigator.pop(context);
+        return;
+      }
+      setState(() {
+        _stories.removeAt(_currentIndex);
+        if (_currentIndex >= _stories.length) {
+          _currentIndex = _stories.length - 1;
+        }
+      });
+      _pageController.jumpToPage(_currentIndex);
+      _loadStoryData();
+      _startTimer();
+      _showSnack('Historia eliminada');
+    } catch (e) {
+      _showSnack('No se pudo eliminar: $e');
+      _resumeTimer();
     }
   }
 
@@ -206,41 +367,19 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               onLongPressUp: () => _resumeTimer(),
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: widget.stories.length,
+                itemCount: _stories.length,
                 onPageChanged: (index) {
                   setState(() => _currentIndex = index);
                   _loadStoryData();
                   _startTimer();
                 },
                 itemBuilder: (context, index) {
-                  final s = widget.stories[index];
+                  final s = _stories[index];
                   return Stack(
                     fit: StackFit.expand,
                     children: [
                       if (s.imageUrl.isNotEmpty)
-                        CachedNetworkImage(
-                          imageUrl: s.imageUrl,
-                          fit: BoxFit.contain,
-                          placeholder: (_, __) => const Center(
-                            child: CircularProgressIndicator(color: Colors.white),
-                          ),
-                          errorWidget: (_, __, ___) => Container(
-                            color: Colors.grey[900],
-                            child: const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.broken_image, color: Colors.white54, size: 50),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'No se pudo cargar la imagen',
-                                    style: TextStyle(color: Colors.white54, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
+                        _StoryMedia(url: s.imageUrl)
                       else
                         Container(
                           color: Colors.grey[900],
@@ -288,7 +427,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                             children: [
                               // Progress bars row
                               Row(
-                                children: widget.stories.asMap().entries.map((entry) {
+                                children: _stories.asMap().entries.map((entry) {
                                   final idx = entry.key;
                                   final isActive = idx == _currentIndex;
                                   final isCompleted = idx < _currentIndex;
@@ -355,6 +494,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                                     ),
                                   ),
                                   const Spacer(),
+                                  if (s.userId == widget.currentUserId)
+                                    IconButton(
+                                      icon: const Icon(Icons.more_vert,
+                                          color: Colors.white),
+                                      onPressed: () =>
+                                          _showStoryOptions(s),
+                                    ),
                                   IconButton(
                                     icon: const Icon(Icons.close, color: Colors.white),
                                     onPressed: () => Navigator.pop(context),
@@ -563,6 +709,103 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: color, size: 22),
+      ),
+    );
+  }
+}
+
+bool _isVideoUrl(String url) {
+  final clean = url.toLowerCase().split('?').first;
+  return clean.endsWith('.mp4') ||
+      clean.endsWith('.mov') ||
+      clean.endsWith('.webm') ||
+      clean.endsWith('.m4v');
+}
+
+class _StoryMedia extends StatefulWidget {
+  final String url;
+
+  const _StoryMedia({required this.url});
+
+  @override
+  State<_StoryMedia> createState() => _StoryMediaState();
+}
+
+class _StoryMediaState extends State<_StoryMedia> {
+  VideoPlayerController? _controller;
+  bool _ready = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isVideoUrl(widget.url)) {
+      _initVideo();
+    }
+  }
+
+  Future<void> _initVideo() async {
+    try {
+      final controller =
+          VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      _controller = controller;
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      await controller.play();
+      if (mounted) {
+        setState(() => _ready = true);
+      }
+    } catch (e) {
+      debugPrint('Error loading story video: $e');
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Widget _error() {
+    return Container(
+      color: Colors.grey[900],
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image, color: Colors.white54, size: 50),
+            SizedBox(height: 8),
+            Text(
+              'No se pudo cargar el contenido',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isVideoUrl(widget.url)) {
+      return CachedNetworkImage(
+        imageUrl: widget.url,
+        fit: BoxFit.contain,
+        placeholder: (_, __) =>
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+        errorWidget: (_, __, ___) => _error(),
+      );
+    }
+    if (_failed) return _error();
+    if (!_ready || _controller == null) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _controller!.value.aspectRatio,
+        child: VideoPlayer(_controller!),
       ),
     );
   }

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/screens/widgets/appbar/appbar-center.dart';
@@ -11,6 +11,7 @@ import 'package:medident/screens/role/dentist/stories/story-viewer-screen.dart';
 import 'package:medident/screens/role/dentist/stories/create-story-screen.dart';
 import 'package:medident/core/models/story-model.dart';
 import 'package:medident/core/providers/ia/valeria-provider.dart';
+import 'package:medident/screens/shared/global-search-screen.dart';
 
 class DentistHomeTablet extends StatefulWidget {
   final String userId;
@@ -56,9 +57,9 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
             const SnackBar(content: Text('Navegando a pacientes...')),
           );
         case 'appointments':
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Abriendo agenda...')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Abriendo agenda...')));
         case 'clinic':
           Navigator.pushNamed(context, '/dentist/clinic');
         case 'create_story':
@@ -91,10 +92,21 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                 SliverToBoxAdapter(
                   child: Appbar_Center_Widget(
                     title: 'Inicio',
-                    leftIcon: HugeIcon(icon: HugeIcons.strokeRoundedMenu01, size: 25),
-                    rightIcon: HugeIcon(icon: HugeIcons.strokeRoundedSearch01, size: 25),
+                    leftIcon: HugeIcon(
+                      icon: HugeIcons.strokeRoundedMenu01,
+                      size: 25,
+                    ),
+                    rightIcon: HugeIcon(
+                      icon: HugeIcons.strokeRoundedSearch01,
+                      size: 25,
+                    ),
                     leftIconTap: () {},
-                    rightIconTap: () {},
+                    rightIconTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const GlobalSearchScreen(),
+                      ),
+                    ),
                     backgroundColor: Colors.white,
                   ),
                 ),
@@ -106,32 +118,39 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                     currentUserStories: provider.currentUserStories,
                     isLoading: provider.isLoadingStories,
                     onStoryTap: (story) {
-                  final bool isMyStory = provider.currentUserStories.any((s) => s.id == story.id);
-                  List<StoryModel> allStories;
-                  int initialIndex;
-                  
-                  if (isMyStory) {
-                    allStories = provider.currentUserStories;
-                  } else {
-                    allStories = [...provider.currentUserStories, ...provider.stories];
-                  }
-                  
-                  initialIndex = allStories.indexWhere((s) => s.id == story.id);
-                  
-                  if (initialIndex != -1) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => StoryViewerScreen(
-                          stories: allStories,
-                          initialIndex: initialIndex,
-                          currentUserId: widget.userId,
-                          provider: provider,
-                        ),
-                      ),
-                    );
-                  }
-                },
+                      final bool isMyStory = provider.currentUserStories.any(
+                        (s) => s.id == story.id,
+                      );
+                      List<StoryModel> allStories;
+                      int initialIndex;
+
+                      if (isMyStory) {
+                        allStories = provider.currentUserStories;
+                      } else {
+                        allStories = [
+                          ...provider.currentUserStories,
+                          ...provider.stories,
+                        ];
+                      }
+
+                      initialIndex = allStories.indexWhere(
+                        (s) => s.id == story.id,
+                      );
+
+                      if (initialIndex != -1) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StoryViewerScreen(
+                              stories: allStories,
+                              initialIndex: initialIndex,
+                              currentUserId: widget.userId,
+                              provider: provider,
+                            ),
+                          ),
+                        );
+                      }
+                    },
                     onAddStoryTap: () {
                       Navigator.push(
                         context,
@@ -145,16 +164,22 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                         ),
                       );
                     },
-                    onLoadMore: provider.hasMoreStories ? () => provider.loadMoreStories() : null,
+                    onLoadMore: provider.hasMoreStories
+                        ? () => provider.loadMoreStories()
+                        : null,
                     isLoadingMore: provider.isLoadingMore,
                     hasMore: provider.hasMoreStories,
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Create_Newposts_Widget(
-                    userId: provider.userId.isNotEmpty ? provider.userId : 'user_dentist_1',
-                    userName: provider.currentUserName.isNotEmpty ? provider.currentUserName : 'Dentista',
-                    userPhoto: '',
+                    userId: provider.userId.isNotEmpty
+                        ? provider.userId
+                        : 'user_dentist_1',
+                    userName: provider.currentUserName.isNotEmpty
+                        ? provider.currentUserName
+                        : 'Dentista',
+                    userPhoto: provider.currentUserPhoto,
                     onPublished: () => provider.refreshAll(),
                   ),
                 ),
@@ -164,9 +189,16 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 48,
+                          ),
                           const SizedBox(height: 16),
-                          Text('Error: ${provider.loadError}', textAlign: TextAlign.center),
+                          Text(
+                            'Error: ${provider.loadError}',
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () => provider.refreshAll(),
@@ -191,35 +223,31 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                   SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 0.75,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index < provider.posts.length) {
-                            return Post_One_Widget(
-                              post: provider.posts[index],
-                              currentUserId: provider.userId,
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                        childCount: provider.posts.length,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 16,
+                            crossAxisSpacing: 16,
+                            childAspectRatio: 0.75,
+                          ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        if (index < provider.posts.length) {
+                          return Post_One_Widget(
+                            post: provider.posts[index],
+                            currentUserId: provider.userId,
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      }, childCount: provider.posts.length),
                     ),
                   ),
                 if (provider.isLoadingMore)
-                  SliverToBoxAdapter(
-                    child: _buildTabletShimmer(),
-                  ),
+                  SliverToBoxAdapter(child: _buildTabletShimmer()),
                 const SliverToBoxAdapter(child: SizedBox(height: 80)),
               ],
             ),
           ),
-    );
+        );
       },
     );
   }
@@ -248,18 +276,11 @@ class _DentistHomeTabletState extends State<DentistHomeTablet> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  height: 14,
-                  width: 120,
-                  color: Colors.white,
-                ),
+                Container(height: 14, width: 120, color: Colors.white),
               ],
             ),
             const SizedBox(height: 12),
-            Container(
-              height: 200,
-              color: Colors.white,
-            ),
+            Container(height: 200, color: Colors.white),
           ],
         ),
       ),

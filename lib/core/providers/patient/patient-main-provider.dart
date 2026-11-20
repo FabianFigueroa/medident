@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:medident/core/providers/base/main-provider-base.dart';
+import 'package:medident/core/providers/patient/patient-delivery-provider.dart';
 import 'package:medident/core/providers/patient/patient-home-provider.dart';
 import 'package:medident/core/providers/patient/patient-profile-provider.dart';
 import 'package:medident/core/providers/patient/patient-security-provider.dart';
 import 'package:medident/core/providers/patient/patient-shop-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-agenda-provider.dart';
+import 'package:medident/core/services/patient/patient-appointment-service.dart';
+import 'package:medident/core/services/patient/patient-delivery-service.dart';
 import 'package:medident/core/services/patient/patient-home-service.dart';
 import 'package:medident/core/services/patient/patient-profile-service.dart';
 import 'package:medident/core/services/patient/patient-security-service.dart';
@@ -14,6 +19,7 @@ class PatientMainProvider extends MainProviderBase {
   final _profileService = PatientProfileService();
   final _securityService = PatientSecurityService();
   final _shopService = PatientShopService();
+  final _deliveryService = PatientDeliveryService();
 
   PatientMainProvider(super.userId) {
     initializeSection('home');
@@ -31,12 +37,18 @@ class PatientMainProvider extends MainProviderBase {
   PatientShopProvider? get shopProvider =>
       getTypedProvider<PatientShopProvider>('shop');
 
+  PatientDeliveryProvider? get deliveryProvider =>
+      getTypedProvider<PatientDeliveryProvider>('delivery');
+
+  DentistAgendaProvider? get personalAgendaProvider =>
+      getTypedProvider<DentistAgendaProvider>('agenda');
+
   @override
   Future<ChangeNotifier> createSectionProvider(String section) async {
     switch (section) {
       case 'home':
         final provider = PatientHomeProvider(userId: userId, service: _homeService);
-        await provider.loadInitialData();
+        unawaited(provider.loadInitialData());
         return provider;
 
       case 'profile':
@@ -56,6 +68,22 @@ class PatientMainProvider extends MainProviderBase {
           provider.loadPromotions(),
         ]);
         return provider;
+
+      case 'delivery':
+        final provider = PatientDeliveryProvider(
+          userId: userId,
+          service: _deliveryService,
+        );
+        await provider.loadDeliveries();
+        return provider;
+
+      case 'agenda':
+        return DentistAgendaProvider(
+          userId: userId,
+          clinicId: '',
+          scope: AgendaScope.patient,
+          appointmentService: PatientAppointmentService(patientId: userId),
+        );
 
       default:
         throw Exception('Sección desconocida: $section');

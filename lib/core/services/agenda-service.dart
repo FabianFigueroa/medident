@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:medident/core/models/turno-model.dart';
+import 'package:medident/core/models/turno-request-model.dart';
 
 enum DayStatus {
   free('Libre', Icons.check_circle, Color(0xFF22C55E), Color(0xFFDCFCE7)),
@@ -120,5 +122,267 @@ class AgendaService {
 
   Future<QuerySnapshot<Map<String, dynamic>>> getUsers({int limit = 50}) async {
     return _firestore.collection('users').limit(limit).get();
+  }
+
+  // ==================== TURNOS (EMPLEADOS) ====================
+
+  Future<List<TurnoModel>> getTurnos({required String dentistId, int limit = 10}) async {
+    try {
+      final snap = await _firestore.collection('turnos')
+          .where('dentistId', isEqualTo: dentistId)
+          .orderBy('date', descending: false)
+          .limit(limit)
+          .get();
+      return snap.docs.map((d) => TurnoModel.fromJson(d.data(), d.id)).toList();
+    } catch (e) {
+      debugPrint('getTurnos: $e');
+      return [];
+    }
+  }
+
+  /// Stream en tiempo real de los turnos laborales de un empleado/dentista.
+  /// Se ordena en memoria para no depender de índices compuestos.
+  Stream<List<TurnoModel>> streamTurnosByEmployee(String employeeId) {
+    if (employeeId.isEmpty) return Stream.value(const []);
+    return _firestore
+        .collection('turnos')
+        .where('employeeId', isEqualTo: employeeId)
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => TurnoModel.fromJson(d.data(), d.id))
+          .toList()
+        ..sort((a, b) {
+          final byDate = a.date.compareTo(b.date);
+          return byDate != 0 ? byDate : a.startTime.compareTo(b.startTime);
+        });
+      return list;
+    });
+  }
+
+  Future<String> createTurno({
+    required String dentistId,
+    required String employeeId,
+    required String employeeName,
+    required DateTime date,
+    required String startTime,
+    required String endTime,
+    String? notes,
+  }) async {
+    final ref = _firestore.collection('turnos').doc();
+    await ref.set({
+      'dentistId': dentistId,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'date': date,
+      'startTime': startTime,
+      'endTime': endTime,
+      'status': 'scheduled',
+      'notes': notes,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  Future<void> updateTurnoStatus(String turnoId, String status) async {
+    await _firestore.collection('turnos').doc(turnoId).update({'status': status});
+  }
+
+  Future<void> setTurnoAttendance({
+    required String turnoId,
+    required String employeeId,
+    required String employeeName,
+    required String attendanceStatus,
+    String? reason,
+    String? clinicId,
+    String? notifyUserId,
+  }) async {
+    await _firestore.collection('turnos').doc(turnoId).update({
+      'attendanceStatus': attendanceStatus,
+      'attendanceAt': FieldValue.serverTimestamp(),
+      if (reason != null && reason.trim().isNotEmpty) 'attendanceNote': reason.trim(),
+    });
+
+    final targetId = (notifyUserId != null && notifyUserId.isNotEmpty)
+        ? notifyUserId
+        : await _clinicOwnerId(clinicId);
+    if (targetId == null || targetId.isEmpty || targetId == employeeId) return;
+
+    final label = attendanceStatus == 'confirmed'
+        ? 'confirmó su asistencia'
+        : 'declinó su asistencia';
+    await _firestore.collection('notifications').add({
+      'userId': targetId,
+      'type': 'turno',
+      'title': attendanceStatus == 'confirmed'
+          ? 'Asistencia confirmada'
+          : 'Asistencia declinada',
+      'body': '$employeeName $label'
+          '${reason != null && reason.trim().isNotEmpty ? ': ${reason.trim()}' : ''}',
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> ensureAttendanceReminder({
+    required TurnoModel turno,
+    required String kind,
+  }) async {
+    final isWeek = kind == 'week';
+    if (isWeek ? turno.reminderWeekSent : turno.reminderDaySent) return;
+    await _firestore.collection('turnos').doc(turno.id).update({
+      isWeek ? 'reminderWeekSent' : 'reminderDaySent': true,
+    });
+    await _firestore.collection('notifications').add({
+      'userId': turno.employeeId,
+      'type': 'turno',
+      'title': isWeek
+          ? 'Tu turno está cerca'
+          : 'Hoy tienes turno',
+      'body': isWeek
+          ? 'Tienes un turno el ${turno.displayDate} de ${turno.startTime} a ${turno.endTime}. Confirma tu asistencia.'
+          : 'Tu turno de hoy empieza a las ${turno.startTime}. Confirma o declina tu asistencia.',
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<String?> _clinicOwnerId(String? clinicId) async {
+    if (clinicId == null || clinicId.isEmpty) return null;
+    try {
+      final clinicDoc = await _firestore.collection('clinics').doc(clinicId).get();
+      return clinicDoc.data()?['ownerId'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> requestTurnoChange({
+    required String turnoId,
+    required String employeeId,
+    required String employeeName,
+    required String type,
+    required String details,
+    String? clinicId,
+    String? targetEmployeeId,
+    String? targetEmployeeName,
+    String? targetTurnoId,
+    DateTime? requestedDate,
+    String? requestedStartTime,
+    String? requestedEndTime,
+  }) async {
+    await _firestore.collection('turno_requests').add({
+      'turnoId': turnoId,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'type': type,
+      'details': details,
+      'status': 'pending',
+      'targetEmployeeId': targetEmployeeId,
+      'targetEmployeeName': targetEmployeeName,
+      'targetTurnoId': targetTurnoId,
+      if (requestedDate != null)
+        'requestedDate': Timestamp.fromDate(requestedDate),
+      'requestedStartTime': requestedStartTime,
+      'requestedEndTime': requestedEndTime,
+      if (clinicId != null && clinicId.isNotEmpty) 'clinicId': clinicId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final typeLabel = switch (type) {
+      'cambio_horario' => 'solicitud de cambio de horario',
+      'cambio_turno' => 'solicitud de cambio de turno',
+      'intercambio' => 'solicitud de intercambio de turno',
+      _ => 'novedad',
+    };
+
+    // Avisar al dueño de la clínica para que revise la solicitud.
+    final ownerId = await _clinicOwnerId(clinicId);
+    if (ownerId != null && ownerId.isNotEmpty && ownerId != employeeId) {
+      await _sendNotification(
+        userId: ownerId,
+        title: 'Nueva $typeLabel',
+        body: '$employeeName envió una $typeLabel'
+            '${targetEmployeeName != null && targetEmployeeName.isNotEmpty ? ' con $targetEmployeeName' : ''}',
+      );
+    }
+
+    // Avisar al empleado implicado en un cambio/intercambio.
+    if (targetEmployeeId != null &&
+        targetEmployeeId.isNotEmpty &&
+        targetEmployeeId != employeeId) {
+      await _sendNotification(
+        userId: targetEmployeeId,
+        title: 'Te proponen un intercambio',
+        body: '$employeeName quiere intercambiar o cambiar un turno contigo. Revisa la solicitud.',
+      );
+    }
+  }
+
+  Future<void> _sendNotification({
+    required String userId,
+    required String title,
+    required String body,
+  }) async {
+    await _firestore.collection('notifications').add({
+      'userId': userId,
+      'type': 'system',
+      'title': title,
+      'body': body,
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateRequestStatus(String requestId, String status, String employeeId) async {
+    await _firestore.collection('turno_requests').doc(requestId).update({'status': status});
+
+    // Send notification
+    await _firestore.collection('notifications').add({
+      'userId': employeeId,
+      'type': 'system',
+      'title': 'Solicitud de Turno',
+      'body': status == 'approved'
+          ? 'Tu solicitud fue aprobada'
+          : status == 'rejected'
+              ? 'Tu solicitud fue rechazada'
+              : 'Tu solicitud ha sido: $status',
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<TurnoRequestModel>> streamTurnoRequests({
+    String? employeeId,
+    String? clinicId,
+  }) {
+    Query<Map<String, dynamic>> query = _firestore.collection('turno_requests');
+    if (employeeId != null && employeeId.isNotEmpty) {
+      query = query.where('employeeId', isEqualTo: employeeId);
+    }
+    if (clinicId != null && clinicId.isNotEmpty) {
+      query = query.where('clinicId', isEqualTo: clinicId);
+    }
+    // Sin orderBy para evitar índices compuestos; se ordena en memoria.
+    return query.snapshots().map((snap) {
+      final list = snap.docs
+          .map((d) => TurnoRequestModel.fromJson(d.data(), d.id))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  Future<String> createReel({required String userId, required String videoUrl, String? description}) async {
+    final ref = _firestore.collection('reels').doc();
+    await ref.set({
+      'userId': userId,
+      'videoUrl': videoUrl,
+      'description': description,
+      'likesCount': 0,
+      'commentsCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
   }
 }

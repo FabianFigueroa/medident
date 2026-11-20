@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:medident/core/utils/app-colors.dart';
 import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-dashboard.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-stats.dart';
@@ -23,7 +24,7 @@ class DentistSecurityMobile extends StatelessWidget {
   Widget _buildDashboard(BuildContext context) {
     final provider = context.watch<DentistSecurityProvider>();
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 252, 251, 251),
+      backgroundColor: AppColors.surfaceVariant,
       // appBar: Appbar_Center_Widget(
       //   title: 'Seguridad IoT',
       //   backgroundColor: const Color.fromARGB(255, 212, 84, 84),

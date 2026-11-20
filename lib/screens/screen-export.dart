@@ -93,3 +93,5 @@ export 'settings/account-screen.dart';
 export 'settings/account-mobile.dart';
 ////////////////////////////////////////////////////// shared
 export 'shared/notification-screen.dart';
+export 'role/patient/patient-delivery-screen.dart';
+export 'role/doctor/doctor-delivery-screen.dart';

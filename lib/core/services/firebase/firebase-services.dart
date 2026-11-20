@@ -25,7 +25,7 @@ class FirebaseServices {
       // Móvil/Desktop: persistencia en disco
       _firestore.settings = const Settings(
         persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        cacheSizeBytes: 200 * 1024 * 1024, // 200 MB (patron Tenderos)
       );
     }
   }

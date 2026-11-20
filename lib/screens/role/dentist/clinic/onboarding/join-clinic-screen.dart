@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
 
 class JoinClinicScreen extends StatefulWidget {
-  const JoinClinicScreen({super.key});
+  final String? userId;
+  final VoidCallback? onJoined;
+
+  const JoinClinicScreen({super.key, this.userId, this.onJoined});
 
   @override
   State<JoinClinicScreen> createState() => _JoinClinicScreenState();
@@ -294,15 +297,19 @@ class _JoinClinicScreenState extends State<JoinClinicScreen>
     });
 
     final cp = context.read<DentistClinicProvider>();
-    final main = context.read<DentistMainProvider>();
-    final userId = main.userId;
+    final main = widget.userId == null ? context.read<DentistMainProvider>() : null;
+    final userId = widget.userId ?? main!.userId;
 
     final success = await cp.joinByCode(apiKey: code, userId: userId);
 
     if (success && cp.status == ClinicStatus.employee) {
-      await main.initializeSection('clinic');
-      if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+      main?.initializeSection('clinic');
+      if (widget.onJoined != null) {
+        widget.onJoined!();
+      } else {
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       }
     } else {
       setState(() {

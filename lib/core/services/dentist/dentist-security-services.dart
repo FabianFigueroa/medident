@@ -1,5 +1,4 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:medident/core/models/contract-request-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-rfid-model.dart';
 import 'package:medident/core/models/roles/dentist/dentist-security-model.dart';
@@ -55,7 +54,6 @@ class DentistSecurityService {
         'cards': FieldValue.arrayUnion([newCard.toMap()])
       });
     } catch (e) {
-      debugPrint("Error al añadir tarjeta: $e");
       throw Exception('No se pudo añadir la tarjeta.');
     }
   }
@@ -68,7 +66,6 @@ class DentistSecurityService {
         'cards': FieldValue.arrayRemove([cardToDelete.toMap()])
       });
     } catch (e) {
-      debugPrint("Error al eliminar tarjeta: $e");
       throw Exception('No se pudo eliminar la tarjeta.');
     }
   }
@@ -88,7 +85,6 @@ class DentistSecurityService {
         await docRef.update({'cards': updatedCards.map((c) => c.toMap()).toList()});
       }
     } catch (e) {
-      debugPrint("Error al actualizar tarjeta: $e");
       throw Exception('No se pudo actualizar la tarjeta.');
     }
   }
@@ -104,7 +100,6 @@ class DentistSecurityService {
         'sensors': FieldValue.arrayUnion([newSensor.toMap()])
       });
     } catch (e) {
-      debugPrint("Error al añadir sensor: $e");
       throw Exception('No se pudo añadir el sensor.');
     }
   }
@@ -117,7 +112,6 @@ class DentistSecurityService {
         'sensors': FieldValue.arrayRemove([sensorToDelete.toMap()])
       });
     } catch (e) {
-      debugPrint("Error al eliminar sensor: $e");
       throw Exception('No se pudo eliminar el sensor.');
     }
   }
@@ -161,7 +155,6 @@ class DentistSecurityService {
         return DentistSecurityModel.fromFirestore(doc);
       }
     } catch (e) {
-      debugPrint('fetchSecurityData error: $e');
     }
     return DentistSecurityModel(
       userId: userId,
@@ -179,7 +172,6 @@ class DentistSecurityService {
         'readers': cardsMap,
       });
     } catch (e) {
-      debugPrint("Error al actualizar lectores: $e");
       throw Exception('No se pudieron actualizar los lectores.');
     }
   }
@@ -195,7 +187,6 @@ class DentistSecurityService {
       }
       return [];
     } catch (e) {
-      debugPrint("Error al obtener lectores: $e");
       return [];
     }
   }

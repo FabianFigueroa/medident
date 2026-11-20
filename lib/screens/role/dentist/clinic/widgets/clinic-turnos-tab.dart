@@ -3,11 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:medident/core/models/turno-model.dart';
+import 'package:medident/core/models/turno-request-model.dart';
+import 'package:medident/core/services/agenda-service.dart';
 import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 
 class ClinicTurnosTab extends StatefulWidget {
-  const ClinicTurnosTab({super.key});
+  final bool isOwner;
+  final bool canManage;
+  const ClinicTurnosTab({super.key, this.isOwner = true, this.canManage = true});
 
   @override
   State<ClinicTurnosTab> createState() => _ClinicTurnosTabState();
@@ -19,12 +23,19 @@ class _ClinicTurnosTabState extends State<ClinicTurnosTab> {
   @override
   Widget build(BuildContext context) {
     final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-    final turnos = context.select<DentistClinicProvider, List<TurnoModel>>((p) => p.turnos);
+    final allTurnos = context.select<DentistClinicProvider, List<TurnoModel>>((p) => p.turnos);
+    final turnos = allTurnos;
     final turnosByDay = _groupByDay(turnos);
+    final clinicId = context.select<DentistClinicProvider, String>(
+        (p) => p.clinic?.id ?? '');
 
     return CustomScrollView(
       slivers: [
         SliverOverlapInjector(handle: handle),
+        if (widget.canManage && clinicId.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _OwnerRequestsCard(clinicId: clinicId),
+          ),
         SliverToBoxAdapter(child: _CalendarHeader(
             month: _selectedMonth,
             onPrev: () => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1)),
@@ -39,7 +50,7 @@ class _ClinicTurnosTabState extends State<ClinicTurnosTab> {
               ).toList());
             },
           )),
-          SliverToBoxAdapter(child: _UpcomingList(turnos: turnos)),
+          SliverToBoxAdapter(child: _UpcomingList(turnos: turnos, canManage: widget.canManage)),
           const SliverToBoxAdapter(child: SizedBox(height: 40)),
         ],
       );
@@ -67,7 +78,261 @@ class _ClinicTurnosTabState extends State<ClinicTurnosTab> {
         turnos: dayTurnos,
         clinicProv: clinicProv,
         userId: userId,
+        isOwner: widget.isOwner,
+        canManage: widget.canManage,
         onRefresh: () => setState(() {}),
+      ),
+    );
+  }
+}
+
+class _OwnerRequestsCard extends StatefulWidget {
+  final String clinicId;
+  const _OwnerRequestsCard({required this.clinicId});
+
+  @override
+  State<_OwnerRequestsCard> createState() => _OwnerRequestsCardState();
+}
+
+class _OwnerRequestsCardState extends State<_OwnerRequestsCard> {
+  late Stream<List<TurnoRequestModel>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = AgendaService().streamTurnoRequests(clinicId: widget.clinicId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _OwnerRequestsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clinicId != widget.clinicId) {
+      _stream = AgendaService().streamTurnoRequests(clinicId: widget.clinicId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<TurnoRequestModel>>(
+      stream: _stream,
+      builder: (context, snap) {
+        final pending = (snap.data ?? [])
+            .where((r) => r.status == 'pending')
+            .toList();
+        if (pending.isEmpty) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.assignment_late_outlined,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Solicitudes de turno',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('${pending.length} pendiente(s) de revisar',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 12)),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => _showRequestsSheet(context, pending),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF4F46E5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: const Text('Revisar',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showRequestsSheet(
+      BuildContext context, List<TurnoRequestModel> requests) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+                child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            const Text('Solicitudes pendientes',
+                style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: requests.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final r = requests[i];
+                  final isNovedad = r.type == 'novedad';
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFF1F5F9)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                                isNovedad
+                                    ? Icons.report_problem_outlined
+                                    : Icons.swap_horiz,
+                                size: 16,
+                                color: isNovedad
+                                    ? Colors.orange
+                                    : const Color(0xFF4F46E5)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                r.employeeName.isNotEmpty
+                                    ? r.employeeName
+                                    : 'Empleado',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (isNovedad ? Colors.orange : const Color(0xFF4F46E5))
+                                    .withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                _requestTypeLabel(r.type),
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isNovedad
+                                        ? Colors.orange[800]
+                                        : const Color(0xFF4F46E5)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (r.details.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(r.details,
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.grey[700],
+                                  height: 1.3)),
+                        ],
+                        if ((r.targetEmployeeName ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text('Empleado implicado: ${r.targetEmployeeName}',
+                              style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600])),
+                        ],
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await AgendaService().updateRequestStatus(
+                                      r.id, 'rejected', r.employeeId);
+                                  if (context.mounted) Navigator.pop(ctx);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: BorderSide(
+                                      color: Colors.red.withOpacity(0.4)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: const Text('Rechazar',
+                                    style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  await AgendaService().updateRequestStatus(
+                                      r.id, 'approved', r.employeeId);
+                                  if (context.mounted) Navigator.pop(ctx);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4F46E5),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: const Text('Aprobar',
+                                    style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -209,7 +474,8 @@ class _DayCell extends StatelessWidget {
 
 class _UpcomingList extends StatelessWidget {
   final List<TurnoModel> turnos;
-  const _UpcomingList({required this.turnos});
+  final bool canManage;
+  const _UpcomingList({required this.turnos, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -236,14 +502,15 @@ class _UpcomingList extends StatelessWidget {
           ])),
         )
       else
-        ...upcoming.take(10).map((t) => _TurnoCard(turno: t)),
+        ...upcoming.take(10).map((t) => _TurnoCard(turno: t, canManage: canManage)),
     ]);
   }
 }
 
 class _TurnoCard extends StatelessWidget {
   final TurnoModel turno;
-  const _TurnoCard({required this.turno});
+  final bool canManage;
+  const _TurnoCard({required this.turno, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +540,8 @@ class _TurnoCard extends StatelessWidget {
             if (!t.isToday)
               Text('${t.date.day}/${t.date.month}/${t.date.year}', style: TextStyle(fontSize: 11, color: Colors.grey[400])),
           ])),
-          PopupMenuButton<String>(
+          if (canManage)
+            PopupMenuButton<String>(
             onSelected: (action) async {
               try {
                 if (action == 'start') {
@@ -323,11 +591,15 @@ class _DayEmployeeSheet extends StatefulWidget {
   final List<TurnoModel> turnos;
   final DentistClinicProvider clinicProv;
   final String userId;
+  final bool isOwner;
+  final bool canManage;
   final VoidCallback onRefresh;
 
   const _DayEmployeeSheet({
     required this.day, required this.turnos,
-    required this.clinicProv, required this.userId, required this.onRefresh,
+    required this.clinicProv, required this.userId, required this.isOwner,
+    this.canManage = true,
+    required this.onRefresh,
   });
 
   @override
@@ -407,30 +679,38 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
                 child: Column(children: [
-                  Icon(Icons.people_outline, size: 36, color: Colors.grey[300]),
+                  Icon(Icons.event_available, size: 36, color: Colors.grey[300]),
                   const SizedBox(height: 8),
-                  Text('Sin empleados asignados este día', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-                  const SizedBox(height: 12),
-                  SizedBox(width: double.infinity, child: ElevatedButton.icon(
-                    onPressed: () => _showAddEmployee(context),
-                    icon: const Icon(Icons.person_add, size: 18),
-                    label: const Text('Vincular empleado'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  )),
-                  const SizedBox(height: 8),
-                  SizedBox(width: double.infinity, child: OutlinedButton.icon(
-                    onPressed: () => _showLinkDoctor(context),
-                    icon: const Icon(Icons.link, size: 18),
-                    label: const Text('Vincular doctor existente'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.teal,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  )),
+                  Text(
+                    widget.isOwner
+                        ? 'Sin empleados asignados este día'
+                        : 'No tienes turnos este día',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                  if (widget.canManage) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                      onPressed: () => _showAddEmployee(context),
+                      icon: const Icon(Icons.person_add, size: 18),
+                      label: const Text('Vincular empleado'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    )),
+                    const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                      onPressed: () => _showLinkDoctor(context),
+                      icon: const Icon(Icons.link, size: 18),
+                      label: const Text('Vincular doctor existente'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.teal,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    )),
+                  ],
                 ]),
               )
             else
@@ -594,5 +874,18 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
         ),
       ),
     );
+  }
+}
+
+String _requestTypeLabel(String type) {
+  switch (type) {
+    case 'cambio_horario':
+      return 'Horario';
+    case 'cambio_turno':
+      return 'Cambio turno';
+    case 'intercambio':
+      return 'Intercambio';
+    default:
+      return 'Novedad';
   }
 }

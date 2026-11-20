@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:medident/core/providers/base/main-provider-base.dart';
 import 'package:medident/core/providers/admin/admin-home-provider.dart';
 import 'package:medident/core/providers/admin/admin-security-provider.dart';
@@ -41,7 +42,7 @@ class AdminMainProvider extends MainProviderBase {
     switch (section) {
       case 'home':
         final provider = AdminHomeProvider(userId: userId, service: _homeService);
-        await provider.loadInitialData();
+        unawaited(provider.loadInitialData());
         return provider;
 
       case 'security':

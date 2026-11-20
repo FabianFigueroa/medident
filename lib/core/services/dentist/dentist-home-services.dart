@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:medident/core/models/comment-model.dart';
 import 'package:medident/core/models/jobs-model.dart';
@@ -17,15 +17,18 @@ class DentistHomeService {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   bool _promoChecked = false;
 
-  // ═══════════════════════════════════════════════════════════
+  // -----------------------------------------------------------
   //  STREAMS EN TIEMPO REAL
-  // ═══════════════════════════════════════════════════════════
+  // -----------------------------------------------------------
 
   Stream<QuerySnapshot<Map<String, dynamic>>> streamPosts({
     int limit = 10,
     String? clinicId,
   }) {
-    var q = _firestore.collection('posts').orderBy('createdAt', descending: true).limit(limit);
+    var q = _firestore
+        .collection('posts')
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
     if (clinicId != null) {
       q = q.where('clinicId', isEqualTo: clinicId);
     }
@@ -45,13 +48,21 @@ class DentistHomeService {
     try {
       final snap = await _firestore.collection('promotions').limit(1).get();
       if (snap.docs.isEmpty) {
-        await _firestore.collection('promotions').doc('_seed').set({'seed': true});
+        await _firestore.collection('promotions').doc('_seed').set({
+          'seed': true,
+        });
       }
       _promoChecked = true;
-    } catch (e) { debugPrint('ensurePromo: $e'); }
+    } catch (e) {
+      debugPrint('ensurePromo: $e');
+    }
   }
 
-  Future<Map<String, dynamic>> getPostsPaginated({int limit = 10, DocumentSnapshot? lastDoc, String? clinicId}) async {
+  Future<Map<String, dynamic>> getPostsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+    String? clinicId,
+  }) async {
     try {
       var q = _firestore.collection('posts') as Query;
       if (clinicId != null) q = q.where('clinicId', isEqualTo: clinicId);
@@ -69,10 +80,7 @@ class DentistHomeService {
       };
     } catch (e) {
       debugPrint('getPosts: $e');
-      return {
-        'posts': <PostModel>[],
-        'lastDocument': null,
-      };
+      return {'posts': <PostModel>[], 'lastDocument': null};
     }
   }
 
@@ -87,15 +95,21 @@ class DentistHomeService {
         final data = doc.data();
         final story = StoryModel.fromJson(data, doc.id);
         storyDocs[doc.id] = data;
-        if (story.userName.isEmpty || story.userPhoto == null || story.userPhoto!.isEmpty) {
+        if (story.userName.isEmpty ||
+            story.userPhoto == null ||
+            story.userPhoto!.isEmpty) {
           missingUserIds.add(story.userId);
         }
         stories.add(story);
       }
 
       if (missingUserIds.isNotEmpty) {
-        final userSnap = await _firestore.collection('users')
-            .where(FieldPath.documentId, whereIn: missingUserIds.take(10).toList())
+        final userSnap = await _firestore
+            .collection('users')
+            .where(
+              FieldPath.documentId,
+              whereIn: missingUserIds.take(10).toList(),
+            )
             .get();
         final userMap = <String, Map<String, dynamic>>{};
         for (final d in userSnap.docs) {
@@ -104,12 +118,17 @@ class DentistHomeService {
 
         for (int i = 0; i < stories.length; i++) {
           final story = stories[i];
-          if (story.userName.isEmpty || story.userPhoto == null || story.userPhoto!.isEmpty) {
+          if (story.userName.isEmpty ||
+              story.userPhoto == null ||
+              story.userPhoto!.isEmpty) {
             final userData = userMap[story.userId];
             if (userData != null) {
-              final updatedData = Map<String, dynamic>.from(storyDocs[story.id] ?? {});
+              final updatedData = Map<String, dynamic>.from(
+                storyDocs[story.id] ?? {},
+              );
               if (story.userName.isEmpty) {
-                updatedData['userName'] = userData['fullName'] ?? userData['userName'] ?? 'Usuario';
+                updatedData['userName'] =
+                    userData['fullName'] ?? userData['userName'] ?? 'Usuario';
               }
               if (story.userPhoto == null || story.userPhoto!.isEmpty) {
                 final imageUrl = userData['imageUrl'];
@@ -124,7 +143,10 @@ class DentistHomeService {
       }
 
       return stories;
-    } catch (e) { debugPrint('getStories: $e'); return []; }
+    } catch (e) {
+      debugPrint('getStories: $e');
+      return [];
+    }
   }
 
   Future<Map<String, dynamic>> getStoriesPaginated({
@@ -132,7 +154,10 @@ class DentistHomeService {
     DocumentSnapshot? lastDoc,
   }) async {
     try {
-      Query q = _firestore.collection('stories').orderBy('createdAt', descending: true).limit(limit);
+      Query q = _firestore
+          .collection('stories')
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
       final stories = <StoryModel>[];
@@ -150,8 +175,12 @@ class DentistHomeService {
       }
 
       if (missingUserIds.isNotEmpty) {
-        final userSnap = await _firestore.collection('users')
-            .where(FieldPath.documentId, whereIn: missingUserIds.take(10).toList())
+        final userSnap = await _firestore
+            .collection('users')
+            .where(
+              FieldPath.documentId,
+              whereIn: missingUserIds.take(10).toList(),
+            )
             .get();
         final userMap = <String, Map<String, dynamic>>{};
         for (final d in userSnap.docs) {
@@ -163,9 +192,12 @@ class DentistHomeService {
           if (story.userName.isEmpty || story.userPhoto == null) {
             final userData = userMap[story.userId];
             if (userData != null) {
-              final updatedData = Map<String, dynamic>.from(storyDocs[story.id] ?? {});
+              final updatedData = Map<String, dynamic>.from(
+                storyDocs[story.id] ?? {},
+              );
               if (story.userName.isEmpty) {
-                updatedData['userName'] = userData['fullName'] ?? userData['userName'] ?? '';
+                updatedData['userName'] =
+                    userData['fullName'] ?? userData['userName'] ?? '';
               }
               if (story.userPhoto == null) {
                 updatedData['userPhoto'] = userData['imageUrl'];
@@ -180,14 +212,27 @@ class DentistHomeService {
         'stories': stories,
         'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
       };
-    } catch (e) { debugPrint('getStoriesP: $e'); return {'stories': [], 'lastDocument': null}; }
+    } catch (e) {
+      debugPrint('getStoriesP: $e');
+      return {'stories': [], 'lastDocument': null};
+    }
   }
 
   Future<List<StoryModel>> getMyStories(String uid, {int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('stories').where('userId', isEqualTo: uid).limit(limit).get();
-      return snap.docs.map((d) => StoryModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getMyStories: $e'); return []; }
+      final snap = await _firestore
+          .collection('stories')
+          .where('userId', isEqualTo: uid)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => StoryModel.fromJson(d.data(), d.id))
+          .where((s) => !s.isExpired)
+          .toList();
+    } catch (e) {
+      debugPrint('getMyStories: $e');
+      return [];
+    }
   }
 
   Future<void> markStoryViewed(String storyId, String viewerId) async {
@@ -196,7 +241,9 @@ class DentistHomeService {
         'viewedBy': FieldValue.arrayUnion([viewerId]),
         'isViewed': true,
       });
-    } catch (e) { debugPrint('markViewed: $e'); }
+    } catch (e) {
+      debugPrint('markViewed: $e');
+    }
   }
 
   Future<void> likeStory(String storyId, String userId) async {
@@ -218,7 +265,11 @@ class DentistHomeService {
     }
   }
 
-  Future<void> addStoryComment(String storyId, String userId, String content) async {
+  Future<void> addStoryComment(
+    String storyId,
+    String userId,
+    String content,
+  ) async {
     await _firestore.collection('story_comments').add({
       'storyId': storyId,
       'userId': userId,
@@ -238,7 +289,7 @@ class DentistHomeService {
         data['id'] = d.id;
         return data;
       }).toList();
-      
+
       // Sort by createdAt in memory (descending) to avoid index requirement
       comments.sort((a, b) {
         final aTime = a['createdAt'];
@@ -251,86 +302,207 @@ class DentistHomeService {
         }
         return 0;
       });
-      
+
       return comments;
-    } catch (e) { debugPrint('getStoryComments: $e'); return []; }
+    } catch (e) {
+      debugPrint('getStoryComments: $e');
+      return [];
+    }
   }
 
-  Future<List<ProductModel>> getProducts({int limit = 10, String? clinicId}) async {
+  Future<List<ProductModel>> getProducts({
+    int limit = 10,
+    String? clinicId,
+  }) async {
     await ensurePromoCollection();
     try {
       var q = _firestore.collection('promotions') as Query;
       if (clinicId != null) q = q.where('clinicId', isEqualTo: clinicId);
       q = q.where('isActive', isEqualTo: true).limit(limit);
-      final snap = await q.get(GetOptions(source: Source.server));
-      return snap.docs.map((d) => ProductModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-    } catch (e) { debugPrint('getProducts: $e'); return []; }
+      final snap = await q.get();
+      return snap.docs
+          .map(
+            (d) =>
+                ProductModel.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('getProducts: $e');
+      return [];
+    }
   }
 
-  Future<List<TreatmentModel>> getTreatments({int limit = 10, String? clinicId}) async {
+  Future<List<TreatmentModel>> getTreatments({
+    int limit = 10,
+    String? clinicId,
+  }) async {
     try {
       var q = _firestore.collection('treatments') as Query;
       if (clinicId != null) q = q.where('clinicId', isEqualTo: clinicId);
       q = q.where('isActive', isEqualTo: true).limit(limit);
       final snap = await q.get();
-      return snap.docs.map((d) => TreatmentModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-    } catch (e) { debugPrint('getTreatments: $e'); return []; }
+      return snap.docs
+          .map(
+            (d) =>
+                TreatmentModel.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('getTreatments: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getTreatmentsPaginated({int limit = 10, DocumentSnapshot? lastDoc, String? clinicId}) async {
+  Future<Map<String, dynamic>> getTreatmentsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+    String? clinicId,
+  }) async {
     try {
       var q = _firestore.collection('treatments') as Query;
       if (clinicId != null) q = q.where('clinicId', isEqualTo: clinicId);
-      q = q.where('isActive', isEqualTo: true).orderBy('createdAt', descending: true).limit(limit);
+      q = q
+          .where('isActive', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => TreatmentModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getTreatmentsP: $e'); return {'items': <TreatmentModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map(
+            (d) =>
+                TreatmentModel.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getTreatmentsP: $e');
+      return {'items': <TreatmentModel>[], 'lastDocument': null};
+    }
   }
 
-  Future<List<AppointmentModel>> getAppointments({required String dentistId, int limit = 10}) async {
+  Future<List<AppointmentModel>> getAppointments({
+    required String dentistId,
+    int limit = 10,
+  }) async {
     try {
-      final snap = await _firestore.collection('appointments').where('dentistId', isEqualTo: dentistId).limit(limit).get();
-      return snap.docs.map((d) => AppointmentModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getAppointments: $e'); return []; }
+      final snap = await _firestore
+          .collection('appointments')
+          .where('dentistId', isEqualTo: dentistId)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => AppointmentModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('getAppointments: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getAppointmentsPaginated({required String dentistId, int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getAppointmentsPaginated({
+    required String dentistId,
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('appointments').where('dentistId', isEqualTo: dentistId).orderBy('date', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('appointments')
+                  .where('dentistId', isEqualTo: dentistId)
+                  .orderBy('date', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => AppointmentModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getAppointmentsP: $e'); return {'items': <AppointmentModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map(
+            (d) => AppointmentModel.fromJson(
+              d.data() as Map<String, dynamic>,
+              d.id,
+            ),
+          )
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getAppointmentsP: $e');
+      return {'items': <AppointmentModel>[], 'lastDocument': null};
+    }
   }
 
-  Future<List<OdontogramModel>> getOdontograms({required String dentistId, int limit = 10}) async {
+  Future<List<OdontogramModel>> getOdontograms({
+    required String dentistId,
+    int limit = 10,
+  }) async {
     try {
-      final snap = await _firestore.collection('odontograms').where('dentistId', isEqualTo: dentistId).limit(limit).get();
-      return snap.docs.map((d) => OdontogramModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getOdontograms: $e'); return []; }
+      final snap = await _firestore
+          .collection('odontograms')
+          .where('dentistId', isEqualTo: dentistId)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => OdontogramModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('getOdontograms: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getOdontogramsPaginated({required String dentistId, int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getOdontogramsPaginated({
+    required String dentistId,
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('odontograms').where('dentistId', isEqualTo: dentistId).orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('odontograms')
+                  .where('dentistId', isEqualTo: dentistId)
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => OdontogramModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getOdontogramsP: $e'); return {'items': <OdontogramModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map(
+            (d) => OdontogramModel.fromJson(
+              d.data() as Map<String, dynamic>,
+              d.id,
+            ),
+          )
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getOdontogramsP: $e');
+      return {'items': <OdontogramModel>[], 'lastDocument': null};
+    }
   }
 
-  Future<List<TurnoModel>> getTurnos({required String dentistId, int limit = 10}) async {
+  Future<List<TurnoModel>> getTurnos({
+    required String dentistId,
+    int limit = 10,
+  }) async {
     try {
       final snap = await _firestore
           .collection('turnos')
           .where('dentistId', isEqualTo: dentistId)
           .limit(limit * 2)
           .get();
-      final turnos = snap.docs.map((d) => TurnoModel.fromJson(Map<String, dynamic>.from(d.data()), d.id)).toList();
+      final turnos = snap.docs
+          .map(
+            (d) =>
+                TurnoModel.fromJson(Map<String, dynamic>.from(d.data()), d.id),
+          )
+          .toList();
       turnos.sort((a, b) => a.date.compareTo(b.date));
       return turnos.take(limit).toList();
     } catch (e) {
@@ -339,132 +511,383 @@ class DentistHomeService {
     }
   }
 
-  Future<Map<String, dynamic>> getTurnosPaginated({required String dentistId, int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getTurnosPaginated({
+    required String dentistId,
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('turnos').where('dentistId', isEqualTo: dentistId).orderBy('date', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('turnos')
+                  .where('dentistId', isEqualTo: dentistId)
+                  .orderBy('date', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => TurnoModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getTurnosP: $e'); return {'items': <TurnoModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map(
+            (d) => TurnoModel.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getTurnosP: $e');
+      return {'items': <TurnoModel>[], 'lastDocument': null};
+    }
   }
 
   Future<List<ProductModel>> getShopProducts({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('products').where('isActive', isEqualTo: true).limit(limit).get(GetOptions(source: Source.server));
-      return snap.docs.map((d) => ProductModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getShopProducts: $e'); return []; }
+      final snap = await _firestore
+          .collection('products')
+          .where('isActive', isEqualTo: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => ProductModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('getShopProducts: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getShopProductsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getShopProductsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('products').where('isActive', isEqualTo: true).orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('products')
+                  .where('isActive', isEqualTo: true)
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
-      final snap = await q.get(GetOptions(source: Source.server));
-      final items = snap.docs.map((d) => ProductModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getShopProductsP: $e'); return {'items': <ProductModel>[], 'lastDocument': null}; }
+      final snap = await q.get();
+      final items = snap.docs
+          .map(
+            (d) =>
+                ProductModel.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getShopProductsP: $e');
+      return {'items': <ProductModel>[], 'lastDocument': null};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getChatMessages({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('messages').orderBy('createdAt', descending: true).limit(limit).get();
-      return snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-    } catch (e) { debugPrint('getChat: $e'); return []; }
+      final snap = await _firestore
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('getChat: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getChatMessagesPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getChatMessagesPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('messages').orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('messages')
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getChatP: $e'); return {'items': <Map<String, dynamic>>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getChatP: $e');
+      return {'items': <Map<String, dynamic>>[], 'lastDocument': null};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getVideoCalls({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('calls').orderBy('createdAt', descending: true).limit(limit).get();
-      return snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-    } catch (e) { debugPrint('getCalls: $e'); return []; }
+      final snap = await _firestore
+          .collection('calls')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('getCalls: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getVideoCallsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getVideoCallsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('calls').orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('calls')
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getCallsP: $e'); return {'items': <Map<String, dynamic>>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getCallsP: $e');
+      return {'items': <Map<String, dynamic>>[], 'lastDocument': null};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getBillInvoices({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('invoices').orderBy('createdAt', descending: true).limit(limit).get();
-      return snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-    } catch (e) { debugPrint('getInvoices: $e'); return []; }
+      final snap = await _firestore
+          .collection('invoices')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('getInvoices: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getBillInvoicesPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getBillInvoicesPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('invoices').orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('invoices')
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getInvoicesP: $e'); return {'items': <Map<String, dynamic>>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getInvoicesP: $e');
+      return {'items': <Map<String, dynamic>>[], 'lastDocument': null};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getClinicalVisits({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('visits').orderBy('date', descending: true).limit(limit).get();
-      return snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-    } catch (e) { debugPrint('getVisits: $e'); return []; }
+      final snap = await _firestore
+          .collection('visits')
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('getVisits: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getClinicalVisitsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getClinicalVisitsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('visits').orderBy('date', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('visits')
+                  .orderBy('date', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getVisitsP: $e'); return {'items': <Map<String, dynamic>>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getVisitsP: $e');
+      return {'items': <Map<String, dynamic>>[], 'lastDocument': null};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getShortReels({int limit = 10}) async {
     try {
-      final snap = await _firestore.collection('reels').orderBy('createdAt', descending: true).limit(limit).get();
-      return snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-    } catch (e) { debugPrint('getReels: $e'); return []; }
+      final snap = await _firestore
+          .collection('reels')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+      return snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('getReels: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getShortReelsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getShortReelsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('reels').orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('reels')
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => d.data()).toList().cast<Map<String, dynamic>>();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getReelsP: $e'); return {'items': <Map<String, dynamic>>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => d.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getReelsP: $e');
+      return {'items': <Map<String, dynamic>>[], 'lastDocument': null};
+    }
   }
 
   Future<List<ProductModel>> getMyPromotions({required String userId}) async {
     try {
-      final snap = await _firestore.collection('promotions').where('userId', isEqualTo: userId).get(GetOptions(source: Source.server));
-      return snap.docs.map((d) => ProductModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getMyPromos: $e'); return []; }
+      final snap = await _firestore
+          .collection('promotions')
+          .where('userId', isEqualTo: userId)
+          .get();
+      return snap.docs
+          .map((d) => ProductModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('getMyPromos: $e');
+      return [];
+    }
   }
 
   Future<List<ProductModel>> getGlobalPromotions() async {
     try {
-      final snap = await _firestore.collection('promotions')
-          .where('scope', isEqualTo: 'global')
-          .get(GetOptions(source: Source.server));
-      return snap.docs.map((d) => ProductModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getGlobalPromos: $e'); return []; }
+      final snap = await _firestore
+          .collection('promotions')
+          .where('scope', whereIn: ['global', 'clinic'])
+          .get();
+      final promos =
+          snap.docs
+              .map((d) => ProductModel.fromJson(d.data(), d.id))
+              .where((p) => p.isActive)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return promos;
+    } catch (e) {
+      debugPrint('getGlobalPromos: $e');
+      return [];
+    }
+  }
+
+  Future<List<PostModel>> getClinicUploads({int limit = 40}) async {
+    try {
+      final snap = await _firestore
+          .collection('posts')
+          .where('sourceType', isEqualTo: 'clinic')
+          .limit(limit)
+          .get();
+      final uploads =
+          snap.docs
+              .map((d) => PostModel.fromJson(d.data(), d.id))
+              .where((p) => !p.isPromotion && p.media.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (uploads.isNotEmpty) return uploads;
+
+      final legacy = await _firestore
+          .collection('posts')
+          .where('clinicId', isNull: false)
+          .limit(limit)
+          .get();
+      final legacyUploads =
+          legacy.docs
+              .map((d) => PostModel.fromJson(d.data(), d.id))
+              .where((p) => !p.isPromotion && p.media.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return legacyUploads;
+    } catch (e) {
+      debugPrint('getClinicUploads: $e');
+      return [];
+    }
+  }
+
+  Stream<List<PostModel>> streamClinicUploads({int limit = 40}) {
+    return _firestore
+        .collection('posts')
+        .where('clinicId', isNull: false)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (snap) =>
+              snap.docs
+                  .map((d) => PostModel.fromJson(d.data(), d.id))
+                  .where((p) => !p.isPromotion && p.media.isNotEmpty)
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        );
   }
 
   Future<String> createPromotion({
@@ -531,46 +954,92 @@ class DentistHomeService {
 
   Future<List<JobModel>> getJobs({int limit = 5}) async {
     try {
-      final snap = await _firestore.collection('jobs').where('isActive', isEqualTo: true).limit(limit * 2).get();
-      final jobs = snap.docs.map((d) => JobModel.fromJson(d.data(), d.id)).toList();
+      final snap = await _firestore
+          .collection('jobs')
+          .where('isActive', isEqualTo: true)
+          .limit(limit * 2)
+          .get();
+      final jobs = snap.docs
+          .map((d) => JobModel.fromJson(d.data(), d.id))
+          .toList();
       jobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return jobs.take(limit).toList();
-    } catch (e) { debugPrint('getJobs: $e'); return []; }
+    } catch (e) {
+      debugPrint('getJobs: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getJobsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getJobsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('jobs').where('isActive', isEqualTo: true).orderBy('createdAt', descending: true).limit(limit) as Query;
+      var q =
+          _firestore
+                  .collection('jobs')
+                  .where('isActive', isEqualTo: true)
+                  .orderBy('createdAt', descending: true)
+                  .limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => JobModel.fromJson(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getJobsP: $e'); return {'items': <JobModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => JobModel.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getJobsP: $e');
+      return {'items': <JobModel>[], 'lastDocument': null};
+    }
   }
 
   Future<List<UserModel>> getSuggested_Friends({int limit = 5}) async {
     try {
       final snap = await _firestore.collection('users').limit(limit).get();
       return snap.docs.map((d) => UserModel.fromMap(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('getSuggested: $e'); return []; }
+    } catch (e) {
+      debugPrint('getSuggested: $e');
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> getSuggestedFriendsPaginated({int limit = 10, DocumentSnapshot? lastDoc}) async {
+  Future<Map<String, dynamic>> getSuggestedFriendsPaginated({
+    int limit = 10,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      var q = _firestore.collection('users').orderBy('fullName').limit(limit) as Query;
+      var q =
+          _firestore.collection('users').orderBy('fullName').limit(limit)
+              as Query;
       if (lastDoc != null) q = q.startAfterDocument(lastDoc);
       final snap = await q.get();
-      final items = snap.docs.map((d) => UserModel.fromMap(d.data() as Map<String, dynamic>, d.id)).toList();
-      return {'items': items, 'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null};
-    } catch (e) { debugPrint('getSuggestedP: $e'); return {'items': <UserModel>[], 'lastDocument': null}; }
+      final items = snap.docs
+          .map((d) => UserModel.fromMap(d.data() as Map<String, dynamic>, d.id))
+          .toList();
+      return {
+        'items': items,
+        'lastDocument': snap.docs.isNotEmpty ? snap.docs.last : null,
+      };
+    } catch (e) {
+      debugPrint('getSuggestedP: $e');
+      return {'items': <UserModel>[], 'lastDocument': null};
+    }
   }
 
   Future<UserModel?> getUser(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) return UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      if (doc.exists)
+        return UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
       return null;
-    } catch (e) { debugPrint('getUser: $e'); return null; }
+    } catch (e) {
+      debugPrint('getUser: $e');
+      return null;
+    }
   }
 
   Future<void> likePost(String postId, String userId) async {
@@ -632,7 +1101,9 @@ class DentistHomeService {
 
   Future<void> followUser(String followerId, String followingId) async {
     if (followerId == followingId) return;
-    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
+    final followRef = _firestore
+        .collection('follows')
+        .doc('${followerId}_$followingId');
     final existing = await followRef.get();
     if (existing.exists) {
       final status = existing.data()?['status'] ?? 'accepted';
@@ -659,30 +1130,55 @@ class DentistHomeService {
 
   Future<void> unfollowUser(String followerId, String followingId) async {
     if (followerId == followingId) return;
-    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
+    final followRef = _firestore
+        .collection('follows')
+        .doc('${followerId}_$followingId');
     await followRef.delete();
   }
 
-  Future<void> acceptFollowRequest(String followerId, String followingId) async {
+  Future<void> acceptFollowRequest(
+    String followerId,
+    String followingId,
+  ) async {
     final batch = _firestore.batch();
-    final followRef = _firestore.collection('follows').doc('${followerId}_$followingId');
+    final followRef = _firestore
+        .collection('follows')
+        .doc('${followerId}_$followingId');
     batch.update(followRef, {'status': 'accepted'});
-    batch.update(_firestore.collection('users').doc(followerId), {'followingCount': FieldValue.increment(1)});
-    batch.update(_firestore.collection('users').doc(followingId), {'followersCount': FieldValue.increment(1)});
+    batch.update(_firestore.collection('users').doc(followerId), {
+      'followingCount': FieldValue.increment(1),
+    });
+    batch.update(_firestore.collection('users').doc(followingId), {
+      'followersCount': FieldValue.increment(1),
+    });
     await batch.commit();
   }
 
-  Future<void> rejectFollowRequest(String followerId, String followingId) async {
-    await _firestore.collection('follows').doc('${followerId}_$followingId').delete();
+  Future<void> rejectFollowRequest(
+    String followerId,
+    String followingId,
+  ) async {
+    await _firestore
+        .collection('follows')
+        .doc('${followerId}_$followingId')
+        .delete();
   }
 
-  Future<String> checkFollowStatus(String currentUserId, String targetUserId) async {
-    final doc = await _firestore.collection('follows').doc('${currentUserId}_$targetUserId').get();
+  Future<String> checkFollowStatus(
+    String currentUserId,
+    String targetUserId,
+  ) async {
+    final doc = await _firestore
+        .collection('follows')
+        .doc('${currentUserId}_$targetUserId')
+        .get();
     if (!doc.exists) return 'none';
     return doc.data()?['status'] ?? 'accepted';
   }
 
-  Future<List<Map<String, dynamic>>> getPendingFollowRequests(String userId) async {
+  Future<List<Map<String, dynamic>>> getPendingFollowRequests(
+    String userId,
+  ) async {
     final query = await _firestore
         .collection('follows')
         .where('followingId', isEqualTo: userId)
@@ -717,9 +1213,18 @@ class DentistHomeService {
 
   Future<List<UserLightModel>> searchUsers(String query) async {
     try {
-      final snap = await _firestore.collection('users').where('fullName', isGreaterThanOrEqualTo: query).limit(10).get();
-      return snap.docs.map((d) => UserLightModel.fromJson(d.data(), d.id)).toList();
-    } catch (e) { debugPrint('searchUsers: $e'); return []; }
+      final snap = await _firestore
+          .collection('users')
+          .where('fullName', isGreaterThanOrEqualTo: query)
+          .limit(10)
+          .get();
+      return snap.docs
+          .map((d) => UserLightModel.fromJson(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('searchUsers: $e');
+      return [];
+    }
   }
 
   Future<void> addToCart(String userId, String productId, int quantity) async {
@@ -731,7 +1236,11 @@ class DentistHomeService {
     });
   }
 
-  Future<void> applyToJob(String userId, String jobId, {String? coverLetter}) async {
+  Future<void> applyToJob(
+    String userId,
+    String jobId, {
+    String? coverLetter,
+  }) async {
     await _firestore.collection('job_applications').add({
       'jobId': jobId,
       'userId': userId,
@@ -794,7 +1303,11 @@ class DentistHomeService {
     String? sourcePhoto,
   }) async {
     final ref = _firestore.collection('posts').doc();
-    final finalMedia = media ?? (imageUrls != null ? MediaItem.fromLegacyUrls(imageUrls) : <MediaItem>[]);
+    final finalMedia =
+        media ??
+        (imageUrls != null
+            ? MediaItem.fromLegacyUrls(imageUrls)
+            : <MediaItem>[]);
     await ref.set({
       'userId': userId,
       'sourceType': sourceType ?? 'user',
@@ -826,9 +1339,9 @@ class DentistHomeService {
     String? sourcePhoto,
   }) async {
     final ref = _firestore.collection('stories').doc();
-    
+
     final storyMedia = media ?? MediaItem.fromUrl(imageUrl);
-    
+
     String userName = '';
     String? userPhoto;
     try {
@@ -841,7 +1354,7 @@ class DentistHomeService {
     } catch (e) {
       debugPrint('Error fetching user data for story: $e');
     }
-    
+
     await ref.set({
       'userId': userId,
       'sourceType': sourceType ?? 'user',
@@ -858,8 +1371,59 @@ class DentistHomeService {
       'userName': userName,
       'userPhoto': userPhoto,
       'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(
+        DateTime.now().add(const Duration(hours: 24)),
+      ),
     });
     return ref.id;
+  }
+
+  Future<void> purgeExpiredStories() async {
+    try {
+      final now = Timestamp.now();
+      final cutoff = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(hours: 24)),
+      );
+      final results = await Future.wait([
+        _firestore
+            .collection('stories')
+            .where('expiresAt', isLessThanOrEqualTo: now)
+            .get(),
+        _firestore
+            .collection('stories')
+            .where('createdAt', isLessThan: cutoff)
+            .get(),
+      ]);
+      final ids = <String>{};
+      for (final snap in results) {
+        for (final doc in snap.docs) {
+          ids.add(doc.id);
+        }
+      }
+      if (ids.isEmpty) return;
+      var batch = _firestore.batch();
+      var count = 0;
+      for (final id in ids) {
+        batch.delete(_firestore.collection('stories').doc(id));
+        count++;
+        if (count == 400) {
+          await batch.commit();
+          batch = _firestore.batch();
+          count = 0;
+        }
+      }
+      if (count > 0) await batch.commit();
+    } catch (e) {
+      debugPrint('purgeExpiredStories: $e');
+    }
+  }
+
+  Future<void> deleteStory(String storyId) async {
+    await _firestore.collection('stories').doc(storyId).delete();
+  }
+
+  Future<void> updateStoryText(String storyId, String? text) async {
+    await _firestore.collection('stories').doc(storyId).update({'text': text});
   }
 
   Future<String> createTurno({
@@ -886,7 +1450,10 @@ class DentistHomeService {
     return ref.id;
   }
 
-  Future<void> updateAppointmentStatus(String appointmentId, String status) async {
+  Future<void> updateAppointmentStatus(
+    String appointmentId,
+    String status,
+  ) async {
     await _firestore.collection('appointments').doc(appointmentId).update({
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),

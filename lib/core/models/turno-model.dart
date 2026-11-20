@@ -11,6 +11,10 @@ class TurnoModel {
   final String startTime;
   final String endTime;
   final String status;
+  final String attendanceStatus;
+  final DateTime? attendanceAt;
+  final bool reminderWeekSent;
+  final bool reminderDaySent;
   final String? notes;
   final DateTime createdAt;
 
@@ -25,6 +29,10 @@ class TurnoModel {
     required this.startTime,
     required this.endTime,
     required this.status,
+    this.attendanceStatus = 'pending',
+    this.attendanceAt,
+    this.reminderWeekSent = false,
+    this.reminderDaySent = false,
     this.notes,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
@@ -52,6 +60,10 @@ class TurnoModel {
     String? startTime,
     String? endTime,
     String? status,
+    String? attendanceStatus,
+    DateTime? attendanceAt,
+    bool? reminderWeekSent,
+    bool? reminderDaySent,
     String? notes,
   }) {
     return TurnoModel(
@@ -65,6 +77,10 @@ class TurnoModel {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       status: status ?? this.status,
+      attendanceStatus: attendanceStatus ?? this.attendanceStatus,
+      attendanceAt: attendanceAt ?? this.attendanceAt,
+      reminderWeekSent: reminderWeekSent ?? this.reminderWeekSent,
+      reminderDaySent: reminderDaySent ?? this.reminderDaySent,
       notes: notes ?? this.notes,
       createdAt: createdAt,
     );
@@ -81,6 +97,12 @@ class TurnoModel {
       'startTime': startTime,
       'endTime': endTime,
       'status': status,
+      'attendanceStatus': attendanceStatus,
+      'attendanceAt': attendanceAt != null
+          ? Timestamp.fromDate(attendanceAt!)
+          : null,
+      'reminderWeekSent': reminderWeekSent,
+      'reminderDaySent': reminderDaySent,
       'notes': notes,
     };
   }
@@ -97,6 +119,10 @@ class TurnoModel {
       startTime: map['startTime'] ?? '',
       endTime: map['endTime'] ?? '',
       status: map['status'] ?? 'scheduled',
+      attendanceStatus: map['attendanceStatus'] ?? 'pending',
+      attendanceAt: (map['attendanceAt'] as Timestamp?)?.toDate(),
+      reminderWeekSent: map['reminderWeekSent'] ?? false,
+      reminderDaySent: map['reminderDaySent'] ?? false,
       notes: map['notes'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
     );

@@ -97,14 +97,12 @@ class DentistSecurityProvider with ChangeNotifier {
         _rfidLogs = logs;
         notifyListeners();
       }, onError: (e) {
-        debugPrint('[DentistSecurityProvider] Error en stream RFID logs (RTDB): $e');
       });
     } else {
       _rfidLogsSubscription = _rfidService.getRfidLogsStream(uid).listen((logs) {
         _rfidLogs = logs;
         notifyListeners();
       }, onError: (e) {
-        debugPrint('[DentistSecurityProvider] Error en stream RFID logs (Firestore): $e');
       });
     }
   }
@@ -117,7 +115,6 @@ class DentistSecurityProvider with ChangeNotifier {
       _unreadAlertsCount = alerts.where((a) => !a.read).length;
       notifyListeners();
     }, onError: (e) {
-      debugPrint('[DentistSecurityProvider] Error en stream alertas: $e');
     });
   }
 
@@ -129,7 +126,6 @@ class DentistSecurityProvider with ChangeNotifier {
         _handleRfidScanFromRealtime(data);
       }
     }, onError: (e) {
-      debugPrint('[DentistSecurityProvider] Error en stream RFID scan: $e');
     });
   }
 
@@ -215,13 +211,11 @@ class DentistSecurityProvider with ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      debugPrint('[DentistSecurityProvider] Error handling RFID scan: $e');
     }
   }
 
   Future<void> _initializeSecurityData() async {
     try {
-      // Primero intenta cargar datos reales
       _listenToSecurityData();
 
       final bool docExists = await _securityService.doesSecurityDocumentExist(uid);
@@ -229,7 +223,6 @@ class DentistSecurityProvider with ChangeNotifier {
         await _generateTestData();
       }
     } catch (e) {
-      debugPrint('[DentistSecurityProvider._initializeSecurityData] Error: $e');
       _listenToSecurityData();
     }
   }
@@ -253,7 +246,6 @@ class DentistSecurityProvider with ChangeNotifier {
       final testDevices = _generateTestDevices();
       await _syncTestDevices(testDevices);
     } catch (e) {
-      debugPrint('[DentistSecurityProvider._generateTestData] ❌ Error: $e');
     }
   }
 
@@ -401,19 +393,13 @@ _securityDataSubscription = _securityService
                 _listenToRfidLogs();
                 notifyListeners();
               },
-            onError: (e, stackTrace) {
+            onError: (e) {
               _error = "Error al obtener los datos de seguridad: $e";
               _isLoading = false;
               notifyListeners();
             },
           );
-    } catch (e, stackTrace) {
-      debugPrint(
-        '[DentistSecurityProvider._listenToSecurityData] ❌ EXCEPCIÓN: $e',
-      );
-      debugPrint(
-        '[DentistSecurityProvider._listenToSecurityData] Stack trace: $stackTrace',
-      );
+    } catch (e) {
       _error = "Error al escuchar datos de seguridad: $e";
       _isLoading = false;
       notifyListeners();
@@ -421,68 +407,45 @@ _securityDataSubscription = _securityService
   }
 
   Future<void> updateCard(DentistRfidCardModel updatedCard) async {
-    debugPrint(
-      '[DentistSecurityProvider.updateCard] Actualizando tarjeta: ${updatedCard.cardId}',
-    );
     try {
       await _securityService.updateCard(uid, updatedCard);
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.updateCard] ❌ Error: $e');
-      debugPrint('[DentistSecurityProvider.updateCard] Stack: $stackTrace');
+    } catch (e) {
       _error = "Error al actualizar la tarjeta: $e";
       notifyListeners();
     }
   }
 
   Future<void> addCard(DentistRfidCardModel newCard) async {
-    debugPrint(
-      '[DentistSecurityProvider.addCard] Agregando tarjeta: ${newCard.cardId}',
-    );
     try {
       await _securityService.addCard(uid, newCard);
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.addCard] ❌ Error: $e');
-      debugPrint('[DentistSecurityProvider.addCard] Stack: $stackTrace');
+    } catch (e) {
       _error = "Error al añadir la tarjeta: $e";
       notifyListeners();
     }
   }
 
   Future<void> deleteCard(DentistRfidCardModel cardToDelete) async {
-    debugPrint(
-      '[DentistSecurityProvider.deleteCard] Eliminando tarjeta: ${cardToDelete.cardId}',
-    );
     try {
       await _securityService.deleteCard(uid, cardToDelete);
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.deleteCard] ❌ Error: $e');
-      debugPrint('[DentistSecurityProvider.deleteCard] Stack: $stackTrace');
+    } catch (e) {
       _error = "Error al eliminar la tarjeta: $e";
       notifyListeners();
     }
   }
 
   Future<void> addSensor(DentistSensorModel newSensor) async {
-    debugPrint(
-      '[DentistSecurityProvider.addSensor] Agregando sensor: ${newSensor.sensorId}',
-    );
     try {
       await _securityService.addSensor(uid, newSensor);
     } catch (e) {
-      debugPrint('[DentistSecurityProvider.addSensor] ❌ Error: $e');
       _error = "Error al añadir el sensor: $e";
       notifyListeners();
     }
   }
 
   Future<void> deleteSensor(DentistSensorModel sensorToDelete) async {
-    debugPrint(
-      '[DentistSecurityProvider.deleteSensor] Eliminando sensor: ${sensorToDelete.sensorId}',
-    );
     try {
       await _securityService.deleteSensor(uid, sensorToDelete);
     } catch (e) {
-      debugPrint('[DentistSecurityProvider.deleteSensor] ❌ Error: $e');
       _error = "Error al eliminar el sensor: $e";
       notifyListeners();
     }
@@ -496,9 +459,6 @@ _securityDataSubscription = _securityService
     String? dentistPhone,
     String? signatureBase64,
   }) async {
-    debugPrint(
-      '[DentistSecurityProvider.acceptContract] Aceptando contrato para userId: $uid',
-    );
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -521,11 +481,8 @@ _securityDataSubscription = _securityService
 
       await _securityService.submitContractForReview(uid, request);
 
-      debugPrint('[DentistSecurityProvider.acceptContract] Solicitud enviada a revisión');
-    } catch (e, stackTrace) {
+    } catch (e) {
       _error = "Error al enviar solicitud: $e";
-      debugPrint("[DentistSecurityProvider.acceptContract] ❌ Error: $e");
-      debugPrint("[DentistSecurityProvider.acceptContract] Stack: $stackTrace");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -552,8 +509,6 @@ _securityDataSubscription = _securityService
     required String cardId,
     required String cardName,
   }) async {
-    debugPrint('[DentistSecurityProvider.assignRfidCard] Asignando tarjeta');
-
     try {
       final newCard = DentistRfidCardModel(
         cardId: cardId,
@@ -564,27 +519,19 @@ _securityDataSubscription = _securityService
       _isAssigningRfidCard = false;
       _isRegisteringCard = false;
       notifyListeners();
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.assignRfidCard] ❌ Error: $e');
-      debugPrint('[DentistSecurityProvider.assignRfidCard] Stack: $stackTrace');
+    } catch (e) {
       _error = "Error al asignar la tarjeta: $e";
       notifyListeners();
     }
   }
 
   Future<void> deleteRfidCard(String cardId) async {
-    debugPrint(
-      '[DentistSecurityProvider.deleteRfidCard] Eliminando tarjeta: $cardId',
-    );
-
     try {
       final cards = _dentistSecurityModel?.rfidCards ?? [];
       final cardToDelete = cards.firstWhere((card) => card.cardId == cardId);
       await _securityService.deleteCard(uid, cardToDelete);
       notifyListeners();
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.deleteRfidCard] ❌ Error: $e');
-      debugPrint('[DentistSecurityProvider.deleteRfidCard] Stack: $stackTrace');
+    } catch (e) {
       _error = "Error al eliminar la tarjeta: $e";
       notifyListeners();
     }
@@ -598,17 +545,10 @@ _securityDataSubscription = _securityService
 
   // --- MÉTODOS PARA CONTROL LED ---
   Future<void> updateActiveLedOption(String? option) async {
-    debugPrint(
-      '[DentistSecurityProvider.updateActiveLedOption] Nueva opción: $option',
-    );
     try {
       _dentistSecurityModel?.activeLedOption = option;
       notifyListeners();
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.updateActiveLedOption] ❌ Error: $e');
-      debugPrint(
-        '[DentistSecurityProvider.updateActiveLedOption] Stack: $stackTrace',
-      );
+    } catch (e) {
       _error = "Error al actualizar la opción LED: $e";
       notifyListeners();
     }
@@ -620,18 +560,9 @@ _securityDataSubscription = _securityService
     String deviceId,
     bool newState,
   ) async {
-    debugPrint(
-      '[DentistSecurityProvider.updateUserDeviceState] Tipo: $deviceType, ID: $deviceId, Estado: $newState',
-    );
-
     try {
-      // Aquí se actualiza el estado del dispositivo
       notifyListeners();
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.updateUserDeviceState] ❌ Error: $e');
-      debugPrint(
-        '[DentistSecurityProvider.updateUserDeviceState] Stack: $stackTrace',
-      );
+    } catch (e) {
       _error = "Error al actualizar el dispositivo: $e";
       notifyListeners();
     }
@@ -642,10 +573,6 @@ _securityDataSubscription = _securityService
     required String? ipAddress,
     required bool isActive,
   }) async {
-    debugPrint(
-      '[DentistSecurityProvider.setEsp32CamConfig] IP: $ipAddress, Activa: $isActive',
-    );
-
     try {
       if (_dentistSecurityModel != null) {
         _dentistSecurityModel!.esp32CamIp = ipAddress;
@@ -654,11 +581,7 @@ _securityDataSubscription = _securityService
             isActive && ipAddress != null && ipAddress.isNotEmpty;
       }
       notifyListeners();
-    } catch (e, stackTrace) {
-      debugPrint('[DentistSecurityProvider.setEsp32CamConfig] ❌ Error: $e');
-      debugPrint(
-        '[DentistSecurityProvider.setEsp32CamConfig] Stack: $stackTrace',
-      );
+    } catch (e) {
       _error = "Error al configurar la cámara: $e";
       notifyListeners();
     }

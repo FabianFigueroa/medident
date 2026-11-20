@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
+import 'package:medident/screens/widgets/shared/profile-clinic-card.dart';
 
 class PatientProfileScreen extends StatefulWidget {
   const PatientProfileScreen({super.key});
@@ -80,6 +81,13 @@ class _ProfileContent extends StatelessWidget {
                       style: const TextStyle(color: Colors.white70, fontSize: 14)),
                 ],
               ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: ProfileClinicCard(
+              userId: user?.uid ?? '',
+              clinicId: user?.clinicId,
+              isClinicOwner: user?.isClinicOwner ?? false,
             ),
           ),
           SliverToBoxAdapter(

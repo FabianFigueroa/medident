@@ -46,13 +46,10 @@ android {
         }
     }
 
-    // ABI Splitting — APK por arquitectura (reduce ~60% el tamaño por APK)
+    // APK universal unico (instala en cualquier Android)
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
+            isEnable = false
         }
     }
 }

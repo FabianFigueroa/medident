@@ -1,876 +1,103 @@
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:medident/screens/shared/promotion-editor-screen.dart';
-import 'image_editor_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:medident/screens/widgets/new-post/image_editor_screen.dart';
+import 'package:medident/screens/widgets/new-post/local_video_preview.dart';
+import 'package:medident/screens/widgets/new-post/video_editor_screen.dart';
+import 'package:medident/screens/widgets/new-post/video_trim_result.dart';
+import 'package:medident/screens/widgets/new-post/video_trim_service.dart';
 
-class PostType {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final String collection;
-  final int maxImages;
+const Color _kAccent = Color(0xFF0EA5A4);
 
-  const PostType._(this.icon, this.label, this.color, this.collection, this.maxImages);
-
-  static const penser = PostType._(Icons.edit_note, 'Pensar', Color(0xFF1DA1F2), 'posts', 0);
-  static const photo = PostType._(Icons.camera_alt_rounded, 'Foto', Color(0xFFE11B48), 'posts', 10);
-  static const promo = PostType._(Icons.card_giftcard_rounded, 'Promo', Color(0xFF9333EA), 'promotions', 5);
-  static const event = PostType._(Icons.event_rounded, 'Evento', Color(0xFFF59E0B), 'events', 5);
-  static const poll = PostType._(Icons.poll_rounded, 'Encuesta', Color(0xFF10B981), 'polls', 0);
-  static const video = PostType._(Icons.videocam_rounded, 'Video', Color(0xFFFF6B6B), 'reels', 1);
-  static const link = PostType._(Icons.link_rounded, 'Enlace', Color(0xFF6366F1), 'posts', 0);
-  static const apoyo = PostType._(Icons.group_add_rounded, 'Apoyo', Color(0xFF06B6D4), 'apoyos', 3);
-  static const grupo = PostType._(Icons.groups_rounded, 'Grupo', Color(0xFFF97316), 'grupos', 3);
-  static const streaming = PostType._(Icons.live_tv_rounded, 'Streaming', Color(0xFFEF4444), 'streaming', 0);
-
-  static const List<PostType> values = [penser, photo, promo, event, poll, video, link, apoyo, grupo, streaming];
+/// Abre la pantalla unica para crear una publicacion.
+Future<void> showCreatePostSheet(
+  BuildContext context, {
+  required String userId,
+  required String userName,
+  String? userPhoto,
+  String? clinicId,
+  String? authorUserId,
+  VoidCallback? onPublished,
+  String promoScope = 'profile',
+  bool startWithGallery = false,
+  bool startAsPromotion = false,
+}) {
+  return Navigator.of(context, rootNavigator: true).push<void>(
+    MaterialPageRoute(
+      builder: (_) => CreateNewPostScreen(
+        userId: userId,
+        userName: userName,
+        userPhoto: userPhoto,
+        clinicId: clinicId,
+        authorUserId: authorUserId,
+        onPublished: onPublished,
+        promoScope: promoScope,
+        startWithGallery: startWithGallery,
+        startAsPromotion: startAsPromotion,
+      ),
+    ),
+  );
 }
 
-class CreateNewPostScreen extends StatefulWidget {
-  final String? userId;
-  final String? userName;
-  final String? userPhoto;
-  final String? clinicId;
-  final VoidCallback? onPublished;
-  final String promoScope;
+enum _ComposerMode { media, text }
 
-  const CreateNewPostScreen({
-    super.key,
-    this.userId,
-    this.userName,
-    this.userPhoto,
-    this.clinicId,
-    this.onPublished,
-    this.promoScope = 'profile',
-  });
+class _PickedMedia {
+  Uint8List bytes;
+  String name;
+  bool isVideo;
+  String path;
+  Duration? duration;
 
-  @override
-  State<CreateNewPostScreen> createState() => _CreateNewPostScreenState();
-}
-
-class _CreateNewPostScreenState extends State<CreateNewPostScreen> {
-  PostType _selectedType = PostType.penser;
-  final _textCtrl = TextEditingController();
-  final _questionCtrl = TextEditingController();
-  final _linkCtrl = TextEditingController();
-  final _titleCtrl = TextEditingController();
-  final _focus = FocusNode();
-  final _picker = ImagePicker();
-  final List<Uint8List> _imageBytes = [];
-  final List<String> _tempPaths = [];
-  List<String> _uploadedImageUrls = [];
-  List<String> _uploadedStoragePaths = [];
-  List<String> _pollOptions = [];
-  final _pollOptCtrl = TextEditingController();
-  bool _isPosting = false;
-
-  String get _userId => widget.userId?.isNotEmpty == true ? widget.userId! : 'user_dentist_1';
-  String get _userName => widget.userName ?? 'Usuario Demo';
-  String get _userPhoto => widget.userPhoto?.isNotEmpty == true ? widget.userPhoto! : '';
-
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() => _focus.requestFocus());
-  }
-
-  @override
-  void dispose() {
-    _textCtrl.dispose();
-    _questionCtrl.dispose();
-    _linkCtrl.dispose();
-    _titleCtrl.dispose();
-    _focus.dispose();
-    _pollOptCtrl.dispose();
-    super.dispose();
-  }
-
-  int get _maxImages => _selectedType.maxImages;
-
-  void _pickCamera() async {
-    if (_imageBytes.length >= _maxImages) {
-      _showMaxAlert();
-      return;
-    }
-    final img = await _picker.pickImage(source: ImageSource.camera, maxWidth: 1200, maxHeight: 1200, imageQuality: 80);
-    if (img != null) _addImage(img);
-  }
-
-  void _pickGallery() async {
-    if (_imageBytes.length >= _maxImages) {
-      _showMaxAlert();
-      return;
-    }
-    final remaining = _maxImages - _imageBytes.length;
-    final imgs = await _picker.pickMultiImage(maxWidth: 1200, maxHeight: 1200, imageQuality: 80);
-    for (final img in imgs.take(remaining)) _addImage(img);
-    if (imgs.length > remaining && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Solo se permiten $_maxImages imágenes. Se agregaron $remaining.')),
-      );
-    }
-  }
-
-  void _addImage(XFile file) async {
-    if (_imageBytes.length >= _maxImages) return;
-    try {
-      _imageBytes.add(await file.readAsBytes());
-      _tempPaths.add(file.path);
-      if (mounted) setState(() {});
-    } catch (_) {}
-  }
-
-  void _showMaxAlert() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Máximo $_maxImages imágenes para este tipo de publicación.')),
-    );
-  }
-
-  void _removeImage(int i) {
-    _imageBytes.removeAt(i);
-    _tempPaths.removeAt(i);
-    if (mounted) setState(() {});
-  }
-
-  void _addPollOpt() {
-    final t = _pollOptCtrl.text.trim();
-    if (t.isNotEmpty && _pollOptions.length < 6) {
-      setState(() => _pollOptions.add(t));
-      _pollOptCtrl.clear();
-    }
-  }
-
-  Future<List<String>> _uploadImages() async {
-    final urls = <String>[];
-    final storage = FirebaseStorage.instance;
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final isClinic = widget.clinicId != null && widget.clinicId!.isNotEmpty;
-    for (var i = 0; i < _imageBytes.length; i++) {
-      final dest = isClinic
-          ? 'posts/clinics/${widget.clinicId}/${ts}_$i.jpg'
-          : 'posts/users/$_userId/${ts}_$i.jpg';
-      final ref = storage.ref(dest);
-      await ref.putData(_imageBytes[i], SettableMetadata(contentType: 'image/jpeg'));
-      urls.add(await ref.getDownloadURL());
-      _uploadedStoragePaths.add(dest);
-    }
-    return urls;
-  }
-
-  Map<String, dynamic> _buildData() {
-    final base = <String, dynamic>{'createdAt': FieldValue.serverTimestamp()};
-    final isClinic = widget.clinicId != null && widget.clinicId!.isNotEmpty;
-    if (isClinic) base['clinicId'] = widget.clinicId;
-
-    switch (_selectedType) {
-      case PostType.penser:
-        return {...base, 'type': 'penser', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0, 'sharesCount': 0, 'likedBy': <String>[], 'city': ''};
-      case PostType.photo:
-        return {...base, 'type': 'photo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'likedBy': <String>[]};
-      case PostType.promo:
-        return {...base, 'type': 'promo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
-      case PostType.event:
-        return {...base, 'type': 'event', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
-      case PostType.poll:
-        return {...base, 'type': 'poll', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'question': _questionCtrl.text.trim(), 'options': _pollOptions.map((o) => {'text': o, 'votes': 0}).toList(), 'votesCount': 0};
-      case PostType.video:
-        return {...base, 'type': 'video', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
-      case PostType.link:
-        return {...base, 'type': 'link', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'url': _linkCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'likesCount': 0, 'commentsCount': 0};
-      case PostType.apoyo:
-        return {...base, 'type': 'apoyo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _titleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'contact': _linkCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'membersCount': 0};
-      case PostType.grupo:
-        return {...base, 'type': 'grupo', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _titleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'membersCount': 0};
-      case PostType.streaming:
-        return {...base, 'type': 'streaming', 'createdBy': _userId, 'userName': _userName, 'userPhoto': _userPhoto, 'name': _titleCtrl.text.trim(), 'description': _textCtrl.text.trim(), 'streamUrl': _linkCtrl.text.trim(), 'imageUrls': _uploadedImageUrls, 'likesCount': 0, 'commentsCount': 0, 'isLive': false};
-    }
-    return base;
-  }
-
-  bool _hasContent() {
-    switch (_selectedType) {
-      case PostType.penser: return _textCtrl.text.trim().isNotEmpty;
-      case PostType.photo: return _imageBytes.isNotEmpty || _textCtrl.text.trim().isNotEmpty;
-      case PostType.event: return _textCtrl.text.trim().isNotEmpty;
-      case PostType.poll: return _pollOptions.isNotEmpty;
-      case PostType.video: return _textCtrl.text.trim().isNotEmpty;
-      case PostType.link: return _linkCtrl.text.trim().isNotEmpty;
-      case PostType.apoyo: return _titleCtrl.text.trim().isNotEmpty;
-      case PostType.grupo: return _titleCtrl.text.trim().isNotEmpty;
-      case PostType.streaming: return _titleCtrl.text.trim().isNotEmpty;
-      default: return false;
-    }
-  }
-
-  Future<void> _publish() async {
-    if (!_hasContent()) return;
-    setState(() => _isPosting = true);
-    try {
-      if (_imageBytes.isNotEmpty) {
-        _uploadedImageUrls = await _uploadImages();
-      }
-      await FirebaseFirestore.instance.collection(_selectedType.collection).add(_buildData());
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Publicado!'), backgroundColor: Color(0xFF0EA5A4)),
-        );
-      }
-      widget.onPublished?.call();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPosting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.close, color: Colors.black87, size: 20),
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: _selectedType.color.withOpacity(0.12),
-            backgroundImage: _userPhoto.isNotEmpty ? NetworkImage(_userPhoto) : null,
-            child: _userPhoto.isEmpty
-                ? Text(_userName.isNotEmpty ? _userName[0].toUpperCase() : '?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _selectedType.color))
-                : null,
-          ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_userName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            Text('Crear ${_selectedType.label}', style: TextStyle(fontSize: 11, color: _selectedType.color.withOpacity(0.7))),
-          ]),
-        ]),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton(
-              onPressed: _isPosting || !_hasContent() ? null : _publish,
-              child: _isPosting
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text('Publicar', style: TextStyle(fontWeight: FontWeight.w600, color: _hasContent() ? const Color(0xFF0EA5A4) : Colors.grey[400])),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildTypeSelector(),
-          const Divider(height: 1),
-          Expanded(child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: _buildBody(),
-          )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypeSelector() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SizedBox(
-        height: 70,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          itemCount: PostType.values.length,
-          itemBuilder: (_, i) {
-            final type = PostType.values[i];
-            final active = _selectedType == type;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedType = type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.only(right: 6),
-                width: active ? 68 : 56,
-                decoration: BoxDecoration(
-                  color: active ? type.color : Colors.grey[50],
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: active ? type.color : Colors.grey[200]!, width: active ? 0 : 1),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(type.icon, size: active ? 22 : 18, color: active ? Colors.white : Colors.grey[500]),
-                    const SizedBox(height: 2),
-                    Text(type.label, style: TextStyle(fontSize: active ? 9 : 8, fontWeight: FontWeight.w600, color: active ? Colors.white : Colors.grey[600])),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_selectedType == PostType.promo) return _buildPromoRedirect();
-    switch (_selectedType) {
-      case PostType.penser: return _textForm(icon: Icons.edit_note, color: const Color(0xFF1DA1F2));
-      case PostType.photo: return _photoForm();
-      case PostType.event: return _textForm(hint: 'Describe tu evento...', icon: Icons.event_rounded, color: const Color(0xFFF59E0B));
-      case PostType.poll: return _pollForm();
-      case PostType.video: return _textForm(hint: 'Describe tu video...', icon: Icons.videocam_rounded, color: const Color(0xFFFF6B6B));
-      case PostType.link: return _linkForm();
-      case PostType.apoyo: return _namedForm('Nombre del grupo de apoyo', Icons.group_add_rounded, const Color(0xFF06B6D4));
-      case PostType.grupo: return _namedForm('Nombre del grupo', Icons.groups_rounded, const Color(0xFFF97316));
-      case PostType.streaming: return _namedForm('Título del streaming', Icons.live_tv_rounded, const Color(0xFFEF4444));
-      default: return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildPromoRedirect() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF9333EA).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Icon(Icons.card_giftcard_rounded, size: 56, color: Color(0xFF9333EA)),
-          ),
-          const SizedBox(height: 20),
-          const Text('Crea promociones con múltiples imágenes',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-          const SizedBox(height: 8),
-          Text('Cada imagen puede tener su propio título, precio y texto',
-            style: TextStyle(fontSize: 13, color: Colors.grey[500])),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: 220,
-            child: ElevatedButton.icon(
-              onPressed: _openPromoEditor,
-              icon: const Icon(Icons.add_circle_outline, size: 20),
-              label: const Text('Crear promoción'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF9333EA),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openPromoEditor() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PromotionEditorScreen(
-          userId: _userId,
-          userName: _userName,
-          userPhoto: _userPhoto,
-          clinicId: widget.clinicId,
-        ),
-      ),
-    );
-    if (result == true && mounted) {
-      Navigator.pop(context);
-      widget.onPublished?.call();
-    }
-  }
-
-  Widget _textForm({String hint = '¿Qué estás pensando?', required IconData icon, required Color color}) {
-    return TextField(
-      controller: _textCtrl,
-      focusNode: _focus,
-      maxLines: 8,
-      minLines: 4,
-      style: const TextStyle(fontSize: 15, height: 1.5),
-      decoration: _decoration(hint, icon, color),
-    );
-  }
-
-  Widget _photoForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildImageSection(color: const Color(0xFFE11B48)),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _textCtrl,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 15),
-          decoration: _decoration('Añade un texto...', Icons.camera_alt_rounded, const Color(0xFFE11B48)),
-        ),
-      ],
-    );
-  }
-
-  Widget _pollForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _questionCtrl,
-          focusNode: _focus,
-          maxLines: 2,
-          style: const TextStyle(fontSize: 15),
-          decoration: _decoration('Escribe tu pregunta...', Icons.poll_rounded, const Color(0xFF10B981)),
-        ),
-        const SizedBox(height: 16),
-        const Text('Opciones', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-        const SizedBox(height: 8),
-        ..._pollOptions.asMap().entries.map((e) => Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981).withOpacity(0.06),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.15)),
-          ),
-          child: Row(children: [
-            Icon(Icons.check_circle, size: 16, color: const Color(0xFF10B981)),
-            const SizedBox(width: 8),
-            Expanded(child: Text(e.value, style: const TextStyle(fontSize: 14))),
-            GestureDetector(
-              onTap: () => setState(() => _pollOptions.removeAt(e.key)),
-              child: Icon(Icons.close, size: 16, color: Colors.grey[400]),
-            ),
-          ]),
-        )),
-        if (_pollOptions.length < 6)
-          Row(children: [
-            Expanded(child: TextField(
-              controller: _pollOptCtrl,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Nueva opción',
-                hintStyle: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                filled: true, fillColor: const Color(0xFFF8F9FA),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-              onSubmitted: (_) => _addPollOpt(),
-            )),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _addPollOpt,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.add, color: Colors.white, size: 18),
-              ),
-            ),
-          ]),
-      ],
-    );
-  }
-
-  Widget _linkForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _linkCtrl,
-          focusNode: _focus,
-          style: const TextStyle(fontSize: 15),
-          decoration: _decoration('URL del enlace...', Icons.link_rounded, const Color(0xFF6366F1)),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _textCtrl,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 15),
-          decoration: _decoration('Descripción...', Icons.description_outlined, const Color(0xFF6366F1)),
-        ),
-      ],
-    );
-  }
-
-  Widget _namedForm(String hint, IconData icon, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildImageSection(color: color),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _titleCtrl,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          decoration: _decoration(hint, icon, color),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _textCtrl,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 15),
-          decoration: _decoration('Descripción...', Icons.description_outlined, color),
-        ),
-        if (_selectedType == PostType.apoyo) ...[
-          const SizedBox(height: 12),
-          TextField(
-            controller: _linkCtrl,
-            style: const TextStyle(fontSize: 15),
-            decoration: _decoration('Contacto (teléfono/email)', Icons.contact_phone_outlined, color),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildImageSection({required Color color}) {
-    if (_imageBytes.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _mediaBtn(Icons.camera_alt, 'Cámara', color, _pickCamera),
-              const SizedBox(width: 16),
-              _mediaBtn(Icons.photo_library, 'Galería', color, _pickGallery),
-            ]),
-            const SizedBox(height: 6),
-            if (_maxImages > 0)
-              Text('Máximo $_maxImages imágenes', style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-          ],
-        ),
-      );
-    }
-
-    final atLimit = _imageBytes.length >= _maxImages;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1,
-          ),
-          itemCount: _imageBytes.length + (atLimit ? 0 : 1),
-          itemBuilder: (_, i) {
-            if (!atLimit && i == _imageBytes.length) {
-              return GestureDetector(
-                onTap: _pickGallery,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!, width: 1.5, strokeAlign: BorderSide.strokeAlignInside),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_photo_alternate_outlined, color: Colors.grey[400], size: 28),
-                        const SizedBox(height: 4),
-                        Text('Agregar', style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-            return GestureDetector(
-              onTap: () => _previewImage(i),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(_imageBytes[i], fit: BoxFit.cover),
-                  ),
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: GestureDetector(
-                      onTap: () => _removeImage(i),
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close, color: Colors.white, size: 14),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 4,
-                    left: 4,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text('Editar', textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(Icons.image, size: 14, color: Colors.grey[400]),
-            const SizedBox(width: 4),
-            Text('${_imageBytes.length} de $_maxImages imágenes · Toca para editar',
-              style: TextStyle(fontSize: 11, color: atLimit ? color : Colors.grey[400])),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _previewImage(int index) async {
-    final result = await Navigator.push<Object?>(
-      context,
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => _FullScreenImagePreview(
-          bytes: _imageBytes[index],
-          onReplace: () async {
-            final picker = ImagePicker();
-            final img = await picker.pickImage(
-              source: ImageSource.gallery,
-              maxWidth: 1200,
-              maxHeight: 1200,
-              imageQuality: 80,
-            );
-            if (img != null) return await img.readAsBytes();
-            return null;
-          },
-          onDelete: () => Navigator.pop(context, 'delete'),
-        ),
-      ),
-    );
-
-    if (result == 'delete') {
-      _removeImage(index);
-    } else if (result is Uint8List) {
-      setState(() => _imageBytes[index] = result);
-    }
-  }
-
-  Widget _mediaBtn(IconData icon, String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.15)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-        ]),
-      ),
-    );
-  }
-
-  InputDecoration _decoration(String hint, IconData icon, Color color) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(fontSize: 15, color: Colors.grey[400]),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.all(16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: color.withOpacity(0.15)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[200]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: color, width: 1.5),
-      ),
-    );
-  }
-}
-
-// ─── Draft Storage ────────────────────────────────────────────────────────
-
-class _DraftStore {
-  static final Map<String, String> _drafts = {};
-  static String? get(String userId) => _drafts[userId];
-  static void set(String userId, String text) => _drafts[userId] = text;
-  static void remove(String userId) => _drafts.remove(userId);
-}
-
-// ─── Full-Screen Image Preview ───────────────────────────────────────────
-
-class _FullScreenImagePreview extends StatefulWidget {
-  final Uint8List bytes;
-  final Future<Uint8List?> Function() onReplace;
-  final VoidCallback onDelete;
-
-  const _FullScreenImagePreview({
+  _PickedMedia({
     required this.bytes,
-    required this.onReplace,
-    required this.onDelete,
+    required this.name,
+    required this.isVideo,
+    this.path = '',
+    this.duration,
   });
 
-  @override
-  State<_FullScreenImagePreview> createState() => _FullScreenImagePreviewState();
-}
-
-class _FullScreenImagePreviewState extends State<_FullScreenImagePreview>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
-    _animCtrl.forward();
+  String get extension {
+    final lower = name.toLowerCase();
+    final dot = lower.lastIndexOf('.');
+    if (dot == -1 || dot == lower.length - 1) {
+      return isVideo ? 'mp4' : 'jpg';
+    }
+    return lower.substring(dot + 1);
   }
 
-  @override
-  void dispose() {
-    _animCtrl.dispose();
-    super.dispose();
+  String get contentType {
+    if (isVideo) {
+      switch (extension) {
+        case 'mov':
+          return 'video/quicktime';
+        case 'webm':
+          return 'video/webm';
+        default:
+          return 'video/mp4';
+      }
+    }
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4,
-                child: Image.memory(widget.bytes, fit: BoxFit.contain),
-              ),
-            ),
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 24,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _actionBtn(Icons.camera_alt, 'Reemplazar', () async {
-                    final newBytes = await widget.onReplace();
-                    if (newBytes != null && mounted) {
-                      Navigator.pop(context, newBytes);
-                    }
-                  }),
-                  const SizedBox(width: 16),
-                  _actionBtn(Icons.crop, 'Ajustar', () async {
-                    final edited = await Navigator.push<Uint8List>(
-                      context,
-                      MaterialPageRoute(
-                        fullscreenDialog: true,
-                        builder: (_) => ImageEditorScreen(imageBytes: widget.bytes),
-                      ),
-                    );
-                    if (edited != null && mounted) {
-                      Navigator.pop(context, edited);
-                    }
-                  }),
-                  const SizedBox(width: 16),
-                  _actionBtn(Icons.delete_outline, 'Eliminar', widget.onDelete),
-                ],
-              ),
-            ),
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_formatBytes(widget.bytes.length)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionBtn(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-        ]),
-      ),
-    );
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String get sizeLabel {
+    final mb = bytes.length / (1024 * 1024);
+    if (mb >= 1) return '${mb.toStringAsFixed(1)} MB';
+    final kb = bytes.length / 1024;
+    return '${kb.toStringAsFixed(0)} KB';
   }
 }
 
-// ─── Card Widget ──────────────────────────────────────────────────────────
-
+/// Tarjeta "Que quieres compartir?" usada en los homes.
 class Create_Newposts_Widget extends StatelessWidget {
   final String? userId;
   final String? userName;
@@ -893,23 +120,6 @@ class Create_Newposts_Widget extends StatelessWidget {
   String get _userName => userName ?? 'Usuario Demo';
   String get _userPhoto => userPhoto?.isNotEmpty == true ? userPhoto! : '';
 
-  void _showSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      builder: (_) => _CreatePostSheet(
-        userId: _userId,
-        userName: _userName,
-        userPhoto: _userPhoto,
-        clinicId: clinicId,
-        onPublished: onPublished,
-        promoScope: promoScope,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -918,53 +128,61 @@ class Create_Newposts_Widget extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 1)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _showSheet(context),
+          onTap: () => showCreatePostSheet(
+            context,
+            userId: _userId,
+            userName: _userName,
+            userPhoto: _userPhoto,
+            clinicId: clinicId,
+            onPublished: onPublished,
+            promoScope: promoScope,
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.grey[100],
-                  backgroundImage: _userPhoto.isNotEmpty ? NetworkImage(_userPhoto) : null,
-                  onBackgroundImageError: _userPhoto.isNotEmpty ? (_, __) {} : null,
-                  child: _userPhoto.isEmpty && _userName.isNotEmpty
-                      ? Text(_userName[0].toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0EA5A4)))
-                      : null,
-                ),
+                _Avatar(name: _userName, photo: _userPhoto),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_userName,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF0F172A))),
+                      Text(
+                        _userName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text('¿Qué quieres compartir?',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                      Text(
+                        'Que quieres compartir?',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                      ),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF0EA5A4), Color(0xFF06B6D4)]),
+                    gradient: const LinearGradient(
+                      colors: [_kAccent, Color(0xFF06B6D4)],
+                    ),
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                          color: const Color(0xFF0EA5A4).withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2)),
-                    ],
                   ),
                   child: const Icon(Icons.add, color: Colors.white, size: 20),
                 ),
@@ -977,646 +195,1398 @@ class Create_Newposts_Widget extends StatelessWidget {
   }
 }
 
-// ─── Bottom Sheet ─────────────────────────────────────────────────────────
+class _Avatar extends StatelessWidget {
+  final String name;
+  final String photo;
 
-class _CreatePostSheet extends StatefulWidget {
-  final String userId;
-  final String userName;
-  final String userPhoto;
+  const _Avatar({required this.name, required this.photo});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: const Color(0xFFE2F7F6),
+      backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+      onBackgroundImageError: photo.isNotEmpty ? (_, __) {} : null,
+      child: photo.isEmpty
+          ? Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: _kAccent,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+/// Pantalla unica de creacion de publicaciones.
+///
+/// Flujo simple: se abre el selector de camara/galeria, se agregan fotos o un
+/// video, se previsualizan en un scroll horizontal, se pueden editar o quitar y
+/// finalmente se publican. La descripcion es opcional.
+class CreateNewPostScreen extends StatefulWidget {
+  final String? userId;
+  final String? userName;
+  final String? userPhoto;
   final String? clinicId;
+  final String? authorUserId;
   final VoidCallback? onPublished;
   final String promoScope;
+  final bool startWithGallery;
+  final bool startAsPromotion;
 
-  const _CreatePostSheet({
-    required this.userId,
-    required this.userName,
-    this.userPhoto = '',
+  const CreateNewPostScreen({
+    super.key,
+    this.userId,
+    this.userName,
+    this.userPhoto,
     this.clinicId,
+    this.authorUserId,
     this.onPublished,
     this.promoScope = 'profile',
+    this.startWithGallery = false,
+    this.startAsPromotion = false,
   });
 
   @override
-  State<_CreatePostSheet> createState() => _CreatePostSheetState();
+  State<CreateNewPostScreen> createState() => _CreateNewPostScreenState();
 }
 
-class _CreatePostSheetState extends State<_CreatePostSheet> with SingleTickerProviderStateMixin {
-  PostType _selectedType = PostType.penser;
+class _CreateNewPostScreenState extends State<CreateNewPostScreen> {
   final _textCtrl = TextEditingController();
-  final _focus = FocusNode();
-  bool _isPosting = false;
-  late AnimationController _springCtrl;
-  late Animation<double> _springAnim;
+  final _captionFocus = FocusNode();
+  final _picker = ImagePicker();
 
-  String get _userId => widget.userId;
-  String get _userName => widget.userName;
-  String get _userPhoto => widget.userPhoto;
+  final List<_PickedMedia> _media = [];
+  _ComposerMode _mode = _ComposerMode.media;
+
+  bool _isPosting = false;
+  double _progress = 0;
+  int _uploaded = 0;
+  int _totalToUpload = 0;
+  String _clinicName = '';
+
+  final _pageCtrl = PageController();
+  int _mediaIndex = 0;
+  bool _isPromotion = false;
+  bool _showPromoFields = false;
+  final _promoTitleCtrl = TextEditingController();
+  final _promoPriceCtrl = TextEditingController();
+  final _promoDiscountCtrl = TextEditingController();
+  DateTime? _promoValidUntil;
+
+  static const int _maxImages = 10;
+
+  String get _userId =>
+      widget.userId?.isNotEmpty == true ? widget.userId! : 'user_dentist_1';
+  String get _userName => widget.userName ?? 'Usuario Demo';
+  String get _userPhoto =>
+      widget.userPhoto?.isNotEmpty == true ? widget.userPhoto! : '';
+  bool get _isClinic => widget.clinicId != null && widget.clinicId!.isNotEmpty;
+  String get _displayName => _isClinic
+      ? (_clinicName.isNotEmpty ? _clinicName : 'Clínica')
+      : _userName;
+  int get _imageCount => _media.where((m) => !m.isVideo).length;
+
+  bool get _hasContent {
+    if (_isPromotion) {
+      return _promoTitleCtrl.text.trim().isNotEmpty &&
+          (double.tryParse(_promoPriceCtrl.text.trim().replaceAll(',', '.')) ??
+                  0) >
+              0 &&
+          _imageCount > 0;
+    }
+    if (_textCtrl.text.trim().isNotEmpty) return true;
+    return _mode == _ComposerMode.media && _media.isNotEmpty;
+  }
+
+  _PickedMedia? get _currentMedia {
+    if (_media.isEmpty) return null;
+    final index = _mediaIndex.clamp(0, _media.length - 1);
+    return _media[index];
+  }
 
   @override
   void initState() {
     super.initState();
-    final draft = _DraftStore.get(_userId);
-    if (draft != null) {
-      _textCtrl.text = draft;
+    if (_isClinic) _loadClinicIdentity();
+    if (widget.startAsPromotion) {
+      _isPromotion = true;
+      _showPromoFields = true;
     }
-    _textCtrl.addListener(_onTextChanged);
+    if (widget.startWithGallery) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pickGalleryMedia();
+      });
+    }
+  }
 
-    _springCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _springAnim = CurvedAnimation(parent: _springCtrl, curve: Curves.elasticOut);
-    _springCtrl.forward();
+  Future<void> _loadClinicIdentity() async {
+    final source = await _clinicSource();
+    if (!mounted) return;
+    setState(() {
+      _clinicName = source['name'] ?? '';
+    });
   }
 
   @override
   void dispose() {
-    _textCtrl.removeListener(_onTextChanged);
     _textCtrl.dispose();
-    _focus.dispose();
-    _springCtrl.dispose();
+    _captionFocus.dispose();
+    _pageCtrl.dispose();
+    _promoTitleCtrl.dispose();
+    _promoPriceCtrl.dispose();
+    _promoDiscountCtrl.dispose();
     super.dispose();
   }
 
-  void _onTextChanged() {
-    final text = _textCtrl.text;
-    if (text.isNotEmpty) {
-      _DraftStore.set(_userId, text);
-    } else {
-      _DraftStore.remove(_userId);
+  Future<void> _pickImages(ImageSource source) async {
+    if (source == ImageSource.gallery) {
+      await _pickGalleryMedia();
+      return;
+    }
+    if (_media.length >= _maxImages) {
+      _showError('Máximo $_maxImages archivos por publicación.');
+      return;
+    }
+    try {
+      final img = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 90,
+      );
+      if (img != null) await _addImage(img);
+      if (mounted) setState(() => _mode = _ComposerMode.media);
+    } catch (e) {
+      _showError('No se pudo abrir la cámara: $e');
     }
   }
 
-  void _onTypeSelected(PostType type) {
-    setState(() => _selectedType = type);
-    Future.delayed(const Duration(milliseconds: 120), () {
-      if (mounted) _focus.requestFocus();
+  Future<void> _pickGalleryMedia() async {
+    if (_media.length >= _maxImages) {
+      _showError('Máximo $_maxImages archivos por publicación.');
+      return;
+    }
+    try {
+      final remaining = _maxImages - _media.length;
+      final files = await _picker.pickMultipleMedia(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 90,
+        limit: remaining,
+      );
+      for (final file in files.take(remaining)) {
+        await _addMediaFile(file);
+      }
+      if (files.length > remaining) {
+        _showError('Solo se permiten $_maxImages archivos.');
+      }
+      if (mounted) setState(() => _mode = _ComposerMode.media);
+    } catch (e) {
+      _showError('No se pudo abrir la galería: $e');
+    }
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    try {
+      final video = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 5),
+      );
+      if (video == null) return;
+      await _addMediaFile(video);
+      if (mounted) setState(() => _mode = _ComposerMode.media);
+    } catch (e) {
+      _showError('No se pudo seleccionar el video: $e');
+    }
+  }
+
+  Future<void> _addImage(XFile file) async {
+    await _addMediaFile(file, forceImage: true);
+  }
+
+  Future<void> _addMediaFile(XFile file, {bool forceImage = false}) async {
+    if (_media.length >= _maxImages) return;
+    try {
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      final lower = file.name.toLowerCase();
+      final isVideo =
+          !forceImage &&
+          (file.mimeType?.startsWith('video/') == true ||
+              lower.endsWith('.mp4') ||
+              lower.endsWith('.mov') ||
+              lower.endsWith('.webm') ||
+              lower.endsWith('.avi') ||
+              lower.endsWith('.mkv'));
+      final duration = isVideo ? await probeVideoDuration(file.path) : null;
+      if (!mounted) return;
+      setState(() {
+        _media.add(
+          _PickedMedia(
+            bytes: bytes,
+            name: file.name,
+            isVideo: isVideo,
+            path: file.path,
+            duration: duration,
+          ),
+        );
+        _mediaIndex = _media.length - 1;
+        _mode = _ComposerMode.media;
+      });
+      if (_pageCtrl.hasClients) {
+        _pageCtrl.jumpToPage(_mediaIndex);
+      }
+    } catch (e) {
+      _showError('No se pudo leer el archivo: $e');
+    }
+  }
+
+  void _removeMedia(int index) {
+    if (index < 0 || index >= _media.length) return;
+    setState(() {
+      _media.removeAt(index);
+      if (_media.isEmpty) {
+        _mediaIndex = 0;
+      } else if (_mediaIndex >= _media.length) {
+        _mediaIndex = _media.length - 1;
+      }
+      if (_isPromotion && _imageCount == 0) {
+        _showPromoFields = true;
+      }
+    });
+    if (_pageCtrl.hasClients && _media.isNotEmpty) {
+      _pageCtrl.jumpToPage(_mediaIndex);
+    }
+  }
+
+  Future<void> _editMedia(int index) async {
+    if (index < 0 || index >= _media.length) return;
+    final item = _media[index];
+    if (item.isVideo) {
+      _showVideoOptions(index);
+      return;
+    }
+    final edited = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ImageEditorScreen(imageBytes: item.bytes),
+      ),
+    );
+    if (edited == null || !mounted) return;
+    setState(() {
+      _media[index] = _PickedMedia(
+        bytes: edited,
+        name: 'editada_${DateTime.now().millisecondsSinceEpoch}.png',
+        isVideo: false,
+      );
     });
   }
 
-  Future<void> _showNewPatientDialog() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (_) => const _PersonFormDialog(type: 'patient'),
+  Future<void> _openVideoEditor(int index) async {
+    if (index < 0 || index >= _media.length) return;
+    final item = _media[index];
+    final result = await Navigator.push<VideoTrimResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoEditorScreen(
+          path: item.path,
+          bytes: item.bytes,
+          name: item.name,
+          duration: item.duration,
+        ),
+      ),
     );
-    if (result != null && mounted) {
-      try {
-        await FirebaseFirestore.instance.collection('users').add({
-          ...result,
-          'role': 'patient',
-          'createdBy': _userId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Paciente creado exitosamente'),
-              backgroundColor: Color(0xFF0EA5A4),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) _showError('Error al crear paciente: $e');
-      }
-    }
+    if (!mounted || result == null || !result.hasBytes) return;
+    setState(() {
+      _media[index] = _PickedMedia(
+        bytes: result.bytes!,
+        name: result.fileName ?? item.name,
+        isVideo: true,
+        duration: result.duration ?? item.duration,
+      );
+    });
   }
 
-  Future<void> _showNewEmployeeDialog() async {
-    final result = await showDialog<Map<String, String>>(
+  void _showVideoOptions(int index) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (_) => const _PersonFormDialog(type: 'employee'),
-    );
-    if (result != null && mounted) {
-      try {
-        await FirebaseFirestore.instance.collection('users').add({
-          ...result,
-          'role': 'employee',
-          'createdBy': _userId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Empleado creado exitosamente'),
-              backgroundColor: Color(0xFFF59E0B),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.content_cut_rounded, color: _kAccent),
+              title: const Text('Recortar video'),
+              subtitle: const Text('Elige el inicio y el final'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _openVideoEditor(index);
+              },
             ),
-          );
-        }
-      } catch (e) {
-        if (mounted) _showError('Error al crear empleado: $e');
-      }
-    }
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+            ListTile(
+              leading: const Icon(Icons.video_library_rounded, color: _kAccent),
+              title: const Text('Cambiar video'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickVideo(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_outline,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Quitar video',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _removeMedia(index);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _publish() async {
-    final text = _textCtrl.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _isPosting = true);
+  Future<Map<String, String>> _clinicSource() async {
+    if (!_isClinic) {
+      return {'name': _userName, 'photo': _userPhoto};
+    }
     try {
-      final base = <String, dynamic>{
-        'type': _selectedType.label.toLowerCase(),
-        'description': text,
-        'createdBy': _userId,
-        'userName': _userName,
-        'userPhoto': _userPhoto,
+      final doc = await FirebaseFirestore.instance
+          .collection('clinics')
+          .doc(widget.clinicId)
+          .get();
+      final data = doc.data();
+      final name = (data?['name'] ?? '').toString().trim();
+      return {
+        'name': name.isNotEmpty ? name : 'Clínica',
+        'photo': (data?['logoUrl'] ?? '').toString(),
+      };
+    } catch (_) {
+      return {'name': 'Clínica', 'photo': ''};
+    }
+  }
+
+  Future<String> _uploadMedia(_PickedMedia item, int index) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final base = _isClinic
+        ? 'posts/clinics/${widget.clinicId}'
+        : 'posts/users/$_userId';
+    final dest = '$base/${ts}_$index.${item.extension}';
+    final ref = FirebaseStorage.instance.ref(dest);
+    await ref.putData(
+      item.bytes,
+      SettableMetadata(
+        contentType: item.contentType,
+        cacheControl: 'public, max-age=31536000, immutable',
+        customMetadata: {'uploadedBy': _userId},
+      ),
+    );
+    return ref.getDownloadURL();
+  }
+
+  Future<List<String>> _uploadAll(List<_PickedMedia> items) async {
+    _totalToUpload = items.length;
+    _uploaded = 0;
+    if (_totalToUpload == 0) return <String>[];
+
+    final futures = <Future<String>>[];
+    for (var i = 0; i < items.length; i++) {
+      futures.add(() async {
+        final url = await _uploadMedia(items[i], i);
+        _uploaded++;
+        if (mounted) {
+          setState(() => _progress = _uploaded / _totalToUpload);
+        }
+        return url;
+      }());
+    }
+    return Future.wait(futures);
+  }
+
+  Future<void> _publish() async {
+    if (!_hasContent || _isPosting) return;
+    setState(() {
+      _isPosting = true;
+      _progress = 0;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final source = await _clinicSource();
+      final items = _mode == _ComposerMode.media
+          ? List<_PickedMedia>.from(_media)
+          : <_PickedMedia>[];
+      final urls = await _uploadAll(items);
+
+      final imageUrls = <String>[];
+      final mediaList = <Map<String, dynamic>>[];
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i];
+        final url = urls[i];
+        mediaList.add({
+          'url': url,
+          'type': item.isVideo ? 'video' : 'image',
+          'name': item.name,
+          if (item.isVideo) 'mimeType': item.contentType,
+        });
+        if (!item.isVideo) imageUrls.add(url);
+      }
+
+      final hasVideo = items.any((m) => m.isVideo);
+      final type = hasVideo
+          ? 'video'
+          : imageUrls.isNotEmpty
+          ? 'photo'
+          : 'penser';
+      final description = _textCtrl.text.trim();
+
+      final authorId = _isClinic ? widget.clinicId! : _userId;
+      final authorName = _isClinic
+          ? ((source['name']?.isNotEmpty ?? false)
+                ? source['name']!
+                : 'Clínica')
+          : _userName;
+      final authorPhoto = _isClinic ? (source['photo'] ?? '') : _userPhoto;
+      final auditUserId = (widget.authorUserId?.isNotEmpty ?? false)
+          ? widget.authorUserId
+          : _userId;
+
+      final data = <String, dynamic>{
+        'type': type,
+        'userId': authorId,
+        'createdBy': authorId,
+        'userName': authorName,
+        'userPhoto': authorPhoto,
+        'sourceType': _isClinic ? 'clinic' : 'user',
+        'sourceId': _isClinic ? widget.clinicId : _userId,
+        'sourceName': authorName,
+        'sourcePhoto': authorPhoto,
+        'description': description,
         'createdAt': FieldValue.serverTimestamp(),
         'likesCount': 0,
         'commentsCount': 0,
+        'sharesCount': 0,
         'likedBy': <String>[],
+        'isActive': true,
+        'isPromotion': _isPromotion,
+        if (_isClinic) 'clinicId': widget.clinicId,
+        if (_isClinic) 'createdByUserId': auditUserId,
+        if (imageUrls.isNotEmpty) 'imageUrls': imageUrls,
+        if (mediaList.isNotEmpty) 'media': mediaList,
       };
-      if (widget.clinicId != null && widget.clinicId!.isNotEmpty) {
-        base['clinicId'] = widget.clinicId;
+
+      await FirebaseFirestore.instance.collection('posts').add(data);
+
+      if (_isPromotion) {
+        final promoName = _promoTitleCtrl.text.trim();
+        final price =
+            double.tryParse(_promoPriceCtrl.text.trim().replaceAll(',', '.')) ??
+            0;
+        final discountPct =
+            double.tryParse(
+              _promoDiscountCtrl.text.trim().replaceAll(',', '.'),
+            ) ??
+            0;
+        final discountPrice = discountPct > 0
+            ? price - (price * discountPct / 100)
+            : null;
+
+        await FirebaseFirestore.instance.collection('promotions').add({
+          'type': 'promo',
+          'userId': _userId,
+          'createdBy': authorId,
+          'createdByUserId': auditUserId,
+          'name': promoName,
+          'description': description.isNotEmpty ? description : promoName,
+          'price': price,
+          'discountPrice': discountPrice,
+          'imageUrls': imageUrls,
+          'slides': imageUrls
+              .map(
+                (url) => {
+                  'imageUrl': url,
+                  'title': promoName,
+                  'subtitle': description,
+                  'price': price,
+                  'discountPrice': discountPrice,
+                },
+              )
+              .toList(),
+          'category': _isClinic ? 'Promoción de clínica' : 'Promoción personal',
+          'clinicId': _isClinic ? widget.clinicId : '',
+          'clinicName': _isClinic ? authorName : null,
+          'clinicLogo': _isClinic ? authorPhoto : null,
+          'source': _isClinic ? 'clinic' : 'user',
+          'sourceName': authorName,
+          'sourcePhoto': authorPhoto,
+          'scope': _isClinic ? 'global' : 'profile',
+          'isActive': true,
+          'isFeatured': false,
+          'isAvailable': true,
+          'expiresAt': _promoValidUntil != null
+              ? Timestamp.fromDate(_promoValidUntil!)
+              : null,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
-      await FirebaseFirestore.instance.collection(_selectedType.collection).add(base);
-      _DraftStore.remove(_userId);
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Publicado!'),
-            backgroundColor: Color(0xFF0EA5A4),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-          ),
-        );
-      }
+
       widget.onPublished?.call();
+      if (!mounted) return;
+      Navigator.pop(context);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Publicacion creada'),
+          backgroundColor: _kAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
-      if (mounted) _showError('Error: $e');
-    } finally {
       if (mounted) setState(() => _isPosting = false);
+      _showError('Error al publicar: $e');
+      return;
     }
+    if (mounted) {
+      setState(() {
+        _isPosting = false;
+        _progress = 0;
+      });
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return GestureDetector(
-      onTap: () => _focus.unfocus(),
-      child: FadeTransition(
-        opacity: _springAnim,
-        child: Container(
-          padding: EdgeInsets.only(bottom: bottom),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildStage()),
+          Positioned.fill(child: IgnorePointer(child: _buildStageGradients())),
+          SafeArea(
+            child: Stack(
+              children: [
+                Align(alignment: Alignment.topCenter, child: _buildTopBar()),
+                Positioned(
+                  right: 10,
+                  bottom: 220 + bottomInset,
+                  child: _buildRail(),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 4),
-                child: Container(width: 40, height: 5,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(3)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Crear publicación',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A), letterSpacing: -0.3)),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.grey[100]),
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Column(
-                    children: [
-                      _buildGrid(),
-                      const SizedBox(height: 20),
-                      _buildTextField(),
-                      const SizedBox(height: 16),
-                      _buildPublishButton(),
-                      SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _buildBottomPanel(bottomInset),
           ),
-        ),
+          if (_isPosting) _buildPostingOverlay(),
+        ],
       ),
     );
   }
 
-  Widget _buildGrid() {
+  Widget _buildStageGradients() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(child: _buildSpecialCard(
-              icon: Icons.person_add,
-              label: 'Nuevo Paciente',
-              color: const Color(0xFF0EA5A4),
-              onTap: _showNewPatientDialog,
-            )),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSpecialCard(
-              icon: Icons.badge,
-              label: 'Nuevo Empleado',
-              color: const Color(0xFFF59E0B),
-              onTap: _showNewEmployeeDialog,
-            )),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12),
-          child: Text('Publicar',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B), letterSpacing: 0.5)),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 2.6,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
+        Container(
+          height: 160,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xCC000000), Color(0x00000000)],
+            ),
           ),
-          itemCount: PostType.values.length,
-          itemBuilder: (_, i) {
-            final type = PostType.values[i];
-            final active = _selectedType == type;
-            return _GridCard(
-              icon: type.icon,
-              label: type.label,
-              color: type.color,
-              active: active,
-              onTap: () => _onTypeSelected(type),
-            );
-          },
+        ),
+        const Spacer(),
+        Container(
+          height: 360,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0xF2000000), Color(0x00000000)],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSpecialCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.15)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 22, color: color),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
-            ),
-            Icon(Icons.chevron_right, size: 18, color: color.withOpacity(0.5)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: TextField(
-        controller: _textCtrl,
-        focusNode: _focus,
-        maxLines: 4,
-        minLines: 2,
-        style: const TextStyle(fontSize: 15, height: 1.5, color: Color(0xFF0F172A)),
-        decoration: InputDecoration(
-          hintText: _selectedType == PostType.penser
-              ? '¿Qué quieres compartir?'
-              : 'Comparte sobre ${_selectedType.label.toLowerCase()}...',
-          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPublishButton() {
-    final hasText = _textCtrl.text.trim().isNotEmpty;
-    return SizedBox(
-      width: double.infinity,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: hasText
-              ? [BoxShadow(color: const Color(0xFF0EA5A4).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
-              : null,
-        ),
-        child: ElevatedButton(
-          onPressed: hasText && !_isPosting ? _publish : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0EA5A4),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: Colors.grey[200],
-            disabledForegroundColor: Colors.grey[400],
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-          ),
-          child: _isPosting
-              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5, strokeCap: StrokeCap.round))
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_selectedType.icon, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Publicar', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 0.3)),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Grid Card ────────────────────────────────────────────────────────────
-
-class _GridCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _GridCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutBack,
-        decoration: BoxDecoration(
-          color: active ? color : Colors.grey[50],
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active ? color : Colors.grey[200]!,
-            width: active ? 0 : 1,
-          ),
-          boxShadow: active
-              ? [BoxShadow(color: color.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 2))]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedScale(
-              scale: active ? 1.1 : 1.0,
-              duration: const Duration(milliseconds: 250),
-              child: Icon(icon, size: 20, color: active ? Colors.white : Colors.grey[500]),
-            ),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: active ? Colors.white : Colors.grey[600],
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Person Form Dialog ───────────────────────────────────────────────────
-
-class _PersonFormDialog extends StatefulWidget {
-  final String type;
-  const _PersonFormDialog({required this.type});
-
-  @override
-  State<_PersonFormDialog> createState() => _PersonFormDialogState();
-}
-
-class _PersonFormDialogState extends State<_PersonFormDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _roleCtrl = TextEditingController();
-  bool _isSaving = false;
-
-  String get _title => widget.type == 'patient' ? 'Nuevo Paciente' : 'Nuevo Empleado';
-  Color get _accent => widget.type == 'patient' ? const Color(0xFF0EA5A4) : const Color(0xFFF59E0B);
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _emailCtrl.dispose();
-    _roleCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Form(
-          key: _formKey,
+  Widget _buildStage() {
+    if (_media.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: _accent.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(
-                  widget.type == 'patient' ? Icons.person_add : Icons.badge,
-                  size: 28, color: _accent,
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: Colors.white,
+                  size: 46,
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(_title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: _nameCtrl,
-                decoration: InputDecoration(
-                  labelText: 'Nombre completo',
-                  labelStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                  prefixIcon: Icon(Icons.person_outline, size: 20, color: _accent.withOpacity(0.6)),
-                  filled: true, fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: _accent, width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const SizedBox(height: 18),
+              const Text(
+                'Tu momento empieza aquí',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
                 ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Campo requerido' : null,
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Teléfono',
-                  labelStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                  prefixIcon: Icon(Icons.phone_outlined, size: 20, color: _accent.withOpacity(0.6)),
-                  filled: true, fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: _accent, width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Campo requerido' : null,
+              const SizedBox(height: 6),
+              Text(
+                _isPromotion
+                    ? 'Agrega una foto para crear la promoción de la clínica'
+                    : 'Graba un video o elige fotos para publicar',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white60, fontSize: 13),
               ),
-              const SizedBox(height: 14),
-              if (widget.type == 'patient')
-                TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Correo electrónico',
-                    labelStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                    prefixIcon: Icon(Icons.email_outlined, size: 20, color: _accent.withOpacity(0.6)),
-                    filled: true, fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: _accent, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Campo requerido' : null,
-                ),
-              if (widget.type == 'employee') ...[
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _roleCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Rol / Puesto',
-                    labelStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                    prefixIcon: Icon(Icons.work_outline, size: 20, color: _accent.withOpacity(0.6)),
-                    filled: true, fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: _accent, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Campo requerido' : null,
-                ),
-              ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        side: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      child: const Text('Cancelar',
-                          style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
-                    ),
+                  _ghostAction(
+                    Icons.photo_library_rounded,
+                    'Galería',
+                    () => _pickImages(ImageSource.gallery),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: 0,
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                          : const Text('Crear', style: TextStyle(fontWeight: FontWeight.w700)),
-                    ),
+                  _ghostAction(
+                    Icons.photo_camera_rounded,
+                    'Cámara',
+                    () => _pickImages(ImageSource.camera),
+                  ),
+                  const SizedBox(width: 12),
+                  _ghostAction(
+                    Icons.videocam_rounded,
+                    'Video',
+                    () => _pickVideo(ImageSource.gallery),
                   ),
                 ],
               ),
             ],
           ),
         ),
+      );
+    }
+
+    return PageView.builder(
+      controller: _pageCtrl,
+      itemCount: _media.length,
+      onPageChanged: (i) => setState(() => _mediaIndex = i),
+      itemBuilder: (_, index) {
+        final item = _media[index];
+        if (item.isVideo) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Colors.black),
+              LocalVideoPreview(
+                path: item.path,
+                bytes: item.bytes,
+                name: item.name,
+              ),
+              Positioned(
+                left: 12,
+                bottom: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.videocam_rounded,
+                        color: Colors.white70,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        item.sizeLabel,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        return GestureDetector(
+          onTap: () => _editMedia(index),
+          child: Container(
+            color: Colors.black,
+            child: Center(
+              child: Image.memory(
+                item.bytes,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _ghostAction(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+        ],
       ),
     );
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSaving = true);
-    final data = <String, String>{
-      'fullName': _nameCtrl.text.trim(),
-      'phone': _phoneCtrl.text.trim(),
-    };
-    if (widget.type == 'patient') {
-      data['email'] = _emailCtrl.text.trim();
-    } else {
-      data['role'] = _roleCtrl.text.trim();
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.35),
+            ),
+          ),
+          const Spacer(),
+          Column(
+            children: [
+              Text(
+                _isPromotion ? 'Nueva promoción' : 'Nueva publicación',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _isClinic ? 'Como $_displayName' : _displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white60, fontSize: 11),
+              ),
+            ],
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: _isPosting || !_hasContent ? null : _publish,
+            style: TextButton.styleFrom(
+              backgroundColor: _hasContent
+                  ? _kAccent
+                  : Colors.white.withValues(alpha: 0.14),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+            ),
+            child: _isPosting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    'Publicar',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRail() {
+    final media = _currentMedia;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _railButton(
+          Icons.photo_library_rounded,
+          'Fotos',
+          () => _pickImages(ImageSource.gallery),
+        ),
+        _railButton(
+          Icons.photo_camera_rounded,
+          'Cámara',
+          () => _pickImages(ImageSource.camera),
+        ),
+        _railButton(
+          Icons.videocam_rounded,
+          'Video',
+          () => _pickVideo(ImageSource.gallery),
+        ),
+        if (media != null)
+          _railButton(
+            media.isVideo ? Icons.swap_horiz_rounded : Icons.tune_rounded,
+            media.isVideo ? 'Cambiar' : 'Editar',
+            () => _editMedia(_mediaIndex),
+          ),
+        if (media != null)
+          _railButton(
+            Icons.delete_outline_rounded,
+            'Quitar',
+            () => _removeMedia(_mediaIndex),
+          ),
+      ],
+    );
+  }
+
+  Widget _railButton(IconData icon, String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+              ),
+              child: Icon(icon, color: Colors.white, size: 21),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomPanel(double bottomInset) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        16 + bottomInset + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_media.isNotEmpty) ...[
+              _buildGalleryStrip(),
+              const SizedBox(height: 12),
+            ],
+            _buildPromotionToggle(),
+            if (_isPromotion) ...[
+              const SizedBox(height: 10),
+              _buildPromoFields(),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textCtrl,
+                    focusNode: _captionFocus,
+                    minLines: 1,
+                    maxLines: 4,
+                    onChanged: (_) => setState(() {}),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: _mode == _ComposerMode.text
+                          ? 'Escribe lo que quieres compartir...'
+                          : 'Describe tu publicación...',
+                      hintStyle: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 14,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_media.isEmpty)
+                  GestureDetector(
+                    onTap: _pickGalleryMedia,
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.add_rounded, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Toca una foto para editarla o un video para reproducirlo. Usa los botones de la miniatura para editar o quitar.',
+              style: TextStyle(color: Colors.white38, fontSize: 10.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromotionToggle() {
+    return GestureDetector(
+      onTap: () => _togglePromotion(!_isPromotion),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: _isPromotion
+              ? _kAccent.withValues(alpha: 0.22)
+              : Colors.white.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: _isPromotion
+                ? _kAccent.withValues(alpha: 0.8)
+                : Colors.white.withValues(alpha: 0.16),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.local_offer_rounded,
+              size: 15,
+              color: _isPromotion ? _kAccent : Colors.white70,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              _isPromotion ? 'Promoción activada' : 'Publicar como promoción',
+              style: TextStyle(
+                color: _isPromotion ? Colors.white : Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(
+              _isPromotion
+                  ? Icons.check_circle_rounded
+                  : Icons.chevron_right_rounded,
+              size: 16,
+              color: _isPromotion ? _kAccent : Colors.white54,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _togglePromotion(bool value) {
+    setState(() {
+      _isPromotion = value;
+      _showPromoFields = value;
+      if (value) _mode = _ComposerMode.media;
+    });
+    if (value && _imageCount == 0) {
+      _pickImages(ImageSource.gallery);
     }
-    Navigator.pop(context, data);
+  }
+
+  Widget _buildPromoFields() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _showPromoFields = !_showPromoFields),
+            child: Row(
+              children: [
+                const Icon(Icons.campaign_rounded, color: _kAccent, size: 16),
+                const SizedBox(width: 7),
+                const Text(
+                  'Datos de la promoción',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  _showPromoFields
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_up_rounded,
+                  color: Colors.white70,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+          if (_showPromoFields) ...[
+            const SizedBox(height: 8),
+            _promoField(
+              controller: _promoTitleCtrl,
+              hint: 'Título de la promoción (obligatorio)',
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Expanded(
+                  child: _promoField(
+                    controller: _promoPriceCtrl,
+                    hint: 'Precio',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _promoField(
+                    controller: _promoDiscountCtrl,
+                    hint: 'Descuento %',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: _pickPromoDate,
+              icon: const Icon(Icons.event_rounded, color: _kAccent, size: 16),
+              label: Text(
+                _promoValidUntil == null
+                    ? 'Vigente hasta (opcional)'
+                    : 'Vigente hasta ${_promoValidUntil!.day}/${_promoValidUntil!.month}/${_promoValidUntil!.year}',
+                style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _promoField({
+    required TextEditingController controller,
+    required String hint,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      onChanged: (_) => setState(() {}),
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.08),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPromoDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          _promoValidUntil ?? DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) setState(() => _promoValidUntil = picked);
+  }
+
+  Widget _buildGalleryStrip() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.photo_library_rounded,
+              color: Colors.white70,
+              size: 16,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Galería',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${_media.length}/$_maxImages',
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _pickGalleryMedia,
+              icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+              label: const Text('Añadir'),
+              style: TextButton.styleFrom(
+                foregroundColor: _kAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 30),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _media.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, index) {
+              if (index == _media.length) {
+                return GestureDetector(
+                  onTap: _pickGalleryMedia,
+                  child: Container(
+                    width: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_rounded, color: Colors.white, size: 26),
+                        SizedBox(height: 3),
+                        Text(
+                          'Galería',
+                          style: TextStyle(color: Colors.white54, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              final item = _media[index];
+              final selected = index == _mediaIndex;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _mediaIndex = index);
+                  if (_pageCtrl.hasClients) {
+                    _pageCtrl.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                },
+                child: Container(
+                  width: 72,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: selected
+                          ? _kAccent
+                          : Colors.white.withValues(alpha: 0.2),
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (item.isVideo)
+                        Container(
+                          color: const Color(0xFF1E293B),
+                          child: const Icon(
+                            Icons.play_circle_fill_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        )
+                      else
+                        Image.memory(item.bytes, fit: BoxFit.cover),
+                      Positioned(
+                        top: 3,
+                        right: 3,
+                        child: GestureDetector(
+                          onTap: () => _removeMedia(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 3,
+                        bottom: 3,
+                        child: GestureDetector(
+                          onTap: () => _editMedia(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Icon(
+                              item.isVideo
+                                  ? Icons.videocam_rounded
+                                  : Icons.tune_rounded,
+                              color: Colors.white,
+                              size: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPostingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.62),
+        child: Center(
+          child: Container(
+            width: 230,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(_kAccent),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  _totalToUpload == 0
+                      ? 'Preparando publicación...'
+                      : 'Subiendo $_uploaded de $_totalToUpload archivos...',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                if (_totalToUpload > 0) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: _progress,
+                      minHeight: 5,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(_kAccent),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

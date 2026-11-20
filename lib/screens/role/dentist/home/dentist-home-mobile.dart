@@ -1,13 +1,16 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:hugeicons/hugeicons.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:medident/screens/role/dentist/home/widgets/medident_collapsing_bar.dart';
 import 'package:medident/screens/role/dentist/widget/jobs_one_widget.dart';
 import 'package:medident/screens/role/dentist/widget/suggested-follow-widget.dart';
 import 'package:medident/screens/widgets/carousel/promotions-carousel-widget.dart';
 import 'package:medident/screens/widgets/scrolls/stories-scroll-widget.dart';
 import 'package:medident/screens/shared/public-profile-screen.dart';
+import 'package:medident/screens/shared/global-search-screen.dart';
 import 'package:medident/screens/shared/notification-screen.dart';
+import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
+import 'package:medident/screens/widgets/shared/clinics-promotion-card.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/core/providers/dentist/dentist-home-provider.dart';
 import 'package:medident/core/providers/notification/notification-provider.dart';
@@ -70,9 +73,9 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
             const SnackBar(content: Text('Navegando a pacientes...')),
           );
         case 'appointments':
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Abriendo agenda...')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Abriendo agenda...')));
         case 'clinic':
           Navigator.pushNamed(context, '/dentist/clinic');
         case 'create_story':
@@ -105,7 +108,7 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= 
+    if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 600) {
       _scrollDebounce?.cancel();
       _scrollDebounce = Timer(const Duration(milliseconds: 250), () {
@@ -128,95 +131,99 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
 
   @override
   Widget build(BuildContext context) {
+    final products = context.select<DentistHomeProvider, List<ProductModel>>(
+      (p) => p.carouselProducts,
+    );
+    final isLoadingPromos = context.select<DentistHomeProvider, bool>(
+      (p) => p.isLoading,
+    );
+    final userName = context.select<DentistHomeProvider, String>(
+      (p) => p.currentUserName,
+    );
+    final userPhoto = context.select<DentistHomeProvider, String>(
+      (p) => p.currentUserPhoto,
+    );
+    final unread = context.watch<NotificationProvider>().unreadCount;
+
+    final carouselItems = products.map((product) {
+      final isClinicPromo =
+          (product.clinicId ?? '').isNotEmpty ||
+          (product.clinicName ?? '').isNotEmpty;
+      return MedidentCarouselItem.fromProduct(
+        product,
+        promoterName: isClinicPromo
+            ? (product.clinicName?.isNotEmpty == true
+                  ? product.clinicName!
+                  : 'Clínica Medident')
+            : userName,
+        promoterRole: isClinicPromo
+            ? 'Clínica verificada'
+            : 'Odontologo verificado',
+        promoterAvatar: isClinicPromo
+            ? (product.clinicLogo?.isNotEmpty == true
+                  ? product.clinicLogo!
+                  : '')
+            : userPhoto,
+        promoterUid: isClinicPromo ? (product.clinicId ?? '') : widget.userId,
+        onCtaPressed: () {},
+      );
+    }).toList();
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () => context.read<DentistHomeProvider>().refreshAll(),
         child: CustomScrollView(
           controller: _scrollController,
-          slivers: const [
-            _AppBarSection(),
-            _CarouselSection(),
-            _StoriesSection(),
-            _ContentSection(),
-            _LoadingMoreShimmer(),
-            SliverToBoxAdapter(child: SizedBox(height: 80)),
+          slivers: [
+            MedidentCollapsingBar(
+              collapsedTitle: 'Medident',
+              expandedHeight: 400,
+              isLoading: isLoadingPromos && products.isEmpty,
+              userProfile: MedidentBrandProfile(
+                storeOrUserName: userName.isNotEmpty
+                    ? userName
+                    : 'Mi clinica Medident',
+                roleOrCity: 'Odontologo verificado',
+                avatarUrl: userPhoto,
+                uid: widget.userId,
+              ),
+              carouselItems: carouselItems,
+              notificationBadgeCount: unread,
+              scrollController: _scrollController,
+              onSearchPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GlobalSearchScreen()),
+              ),
+              onScannerPressed: () {},
+              showCreatePost: true,
+              onCreatePostPressed: () {
+                final provider = context.read<DentistHomeProvider>();
+                showCreatePostSheet(
+                  context,
+                  userId: provider.userId,
+                  userName: provider.currentUserName.isNotEmpty
+                      ? provider.currentUserName
+                      : 'Usuario Medident',
+                  userPhoto: provider.currentUserPhoto,
+                  onPublished: () => provider.refreshAll(),
+                );
+              },
+              onNotificationPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              ),
+              onCarouselItemTapped: (item) {},
+              onProfileCardTapped: (_) {},
+            ),
+            const _StoriesSection(),
+            const SliverToBoxAdapter(child: ClinicsPromotionCard()),
+            const _ContentSection(),
+            const _LoadingMoreShimmer(),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       ),
       floatingActionButton: const SizedBox.shrink(),
-    );
-  }
-}
-
-// ─── AppBar (nunca cambia) ───────────────────────────────────
-class _AppBarSection extends StatelessWidget {
-  const _AppBarSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final title = context.select<DentistHomeProvider, String>((p) => p.userId);
-    return SliverToBoxAdapter(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        color: Colors.white,
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                child: HugeIcon(
-                  icon: HugeIcons.strokeRoundedArrowLeft01,
-                  color: Colors.grey,
-                  size: 24,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const NotificationScreen()),
-              ),
-              child: _NotificationBadge(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Carousel promociones ────────────────────────────────────
-class _CarouselSection extends StatelessWidget {
-  const _CarouselSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final products = context.select<DentistHomeProvider, List<ProductModel>>(
-      (p) => p.products,
-    );
-    return SliverToBoxAdapter(
-      child: products.isEmpty
-          ? const SizedBox(height: 210)
-          : Promotions_Carousel_Widget(
-              products: products.take(5).toList(),
-              onProductTap: (product) {},
-            ),
     );
   }
 }
@@ -239,12 +246,17 @@ class _StoriesSection extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-                        builder: (_) => PublicProfileScreen(userId: userId, currentUserId: provider.userId),
-                      ),
-                    );
-                  },
+              builder: (_) => PublicProfileScreen(
+                userId: userId,
+                currentUserId: provider.userId,
+              ),
+            ),
+          );
+        },
         onStoryTap: (story) {
-          final isMyStory = provider.currentUserStories.any((s) => s.id == story.id);
+          final isMyStory = provider.currentUserStories.any(
+            (s) => s.id == story.id,
+          );
           List<StoryModel> allStories;
           int? initialIndex;
 
@@ -273,7 +285,10 @@ class _StoriesSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PublicProfileScreen(userId: userId, currentUserId: provider.userId),
+                        builder: (_) => PublicProfileScreen(
+                          userId: userId,
+                          currentUserId: provider.userId,
+                        ),
                       ),
                     );
                   },
@@ -311,12 +326,24 @@ class _ContentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.select<DentistHomeProvider, bool>((p) => p.isLoading);
-    final loadError = context.select<DentistHomeProvider, String?>((p) => p.loadError);
-    final posts = context.select<DentistHomeProvider, List<PostModel>>((p) => p.posts);
-    final stories = context.select<DentistHomeProvider, List<StoryModel>>((p) => p.stories);
-    final products = context.select<DentistHomeProvider, List<ProductModel>>((p) => p.products);
-    final jobs = context.select<DentistHomeProvider, List<JobModel>>((p) => p.jobs);
+    final isLoading = context.select<DentistHomeProvider, bool>(
+      (p) => p.isLoading,
+    );
+    final loadError = context.select<DentistHomeProvider, String?>(
+      (p) => p.loadError,
+    );
+    final posts = context.select<DentistHomeProvider, List<PostModel>>(
+      (p) => p.posts,
+    );
+    final stories = context.select<DentistHomeProvider, List<StoryModel>>(
+      (p) => p.stories,
+    );
+    final products = context.select<DentistHomeProvider, List<ProductModel>>(
+      (p) => p.products,
+    );
+    final jobs = context.select<DentistHomeProvider, List<JobModel>>(
+      (p) => p.jobs,
+    );
 
     if (isLoading) {
       return SliverList(
@@ -336,10 +363,13 @@ class _ContentSection extends StatelessWidget {
             children: [
               const Icon(Icons.wifi_off, size: 48, color: Colors.grey),
               const SizedBox(height: 12),
-              Text('No se pudo cargar el home',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'No se pudo cargar el home',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               TextButton(
-                onPressed: () => context.read<DentistHomeProvider>().refreshAll(),
+                onPressed: () =>
+                    context.read<DentistHomeProvider>().refreshAll(),
                 child: const Text('Reintentar'),
               ),
             ],
@@ -375,8 +405,12 @@ class _ContentSection extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 40, height: 40,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -397,16 +431,27 @@ class _ContentSection extends StatelessWidget {
             Container(height: 16, width: 200, color: Colors.white),
             const SizedBox(height: 12),
             Container(
-              height: 200, width: double.infinity,
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(3, (i) => Container(
-                width: 24, height: 24,
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              )),
+              children: List.generate(
+                3,
+                (i) => Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -421,11 +466,12 @@ class _LoadingMoreShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLoadingMore = context.select<DentistHomeProvider, bool>((p) => p.isLoadingMore);
-    if (!isLoadingMore) return const SliverToBoxAdapter(child: SizedBox.shrink());
-    return SliverToBoxAdapter(
-      child: _buildInlineShimmer(),
+    final isLoadingMore = context.select<DentistHomeProvider, bool>(
+      (p) => p.isLoadingMore,
     );
+    if (!isLoadingMore)
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    return SliverToBoxAdapter(child: _buildInlineShimmer());
   }
 
   static Widget _buildInlineShimmer() {
@@ -440,8 +486,12 @@ class _LoadingMoreShimmer extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 40, height: 40,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Container(height: 14, width: 120, color: Colors.white),
@@ -450,7 +500,10 @@ class _LoadingMoreShimmer extends StatelessWidget {
             const SizedBox(height: 12),
             Container(
               height: 180,
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ],
         ),
@@ -465,23 +518,26 @@ class _IntercalatedFeed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLoadingMore = context.select<DentistHomeProvider, bool>((p) => p.isLoadingMore);
-    final totalPosts = context.select<DentistHomeProvider, int>((p) => p.posts.length);
-    if (totalPosts == 0) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    final isLoadingMore = context.select<DentistHomeProvider, bool>(
+      (p) => p.isLoadingMore,
+    );
+    final totalPosts = context.select<DentistHomeProvider, int>(
+      (p) => p.posts.length,
+    );
+    if (totalPosts == 0)
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-    final interleavedWidgets = (totalPosts / 3).ceil();
-    final itemCount = totalPosts + interleavedWidgets;
+    // Un widget intercalado despues de cada bloque de 3 posts.
+    final widgetCount = totalPosts ~/ 3;
+    final itemCount = totalPosts + widgetCount;
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (ctx, index) {
-          if (index == itemCount - 1 && isLoadingMore) {
-            return _LoadingMoreShimmer._buildInlineShimmer();
-          }
-          return _FeedItem(index: index);
-        },
-        childCount: itemCount + (isLoadingMore ? 1 : 0),
-      ),
+      delegate: SliverChildBuilderDelegate((ctx, index) {
+        if (index == itemCount && isLoadingMore) {
+          return _LoadingMoreShimmer._buildInlineShimmer();
+        }
+        return _FeedItem(index: index);
+      }, childCount: itemCount + (isLoadingMore ? 1 : 0)),
     );
   }
 }
@@ -496,16 +552,21 @@ class _FeedItem extends StatelessWidget {
     final totalPosts = provider.posts.length;
     if (totalPosts == 0) return const SizedBox.shrink();
 
-    const postsPerBlock = 3;
+    // Patron: post, post, post, widget (4 slots por grupo de 3 posts).
     const blockSize = 4;
+    const postsPerBlock = 3;
     final blockIndex = index ~/ blockSize;
     final positionInBlock = index % blockSize;
 
-    if (positionInBlock == 2) {
+    if (positionInBlock == postsPerBlock) {
       return _IntercalatedWidget(blockIndex: blockIndex);
     }
 
     final postIndex = (blockIndex * postsPerBlock) + positionInBlock;
+
+    if (postIndex >= totalPosts) {
+      return const SizedBox.shrink();
+    }
 
     if (postIndex >= totalPosts - 2 &&
         !provider.isLoadingMore &&
@@ -513,17 +574,13 @@ class _FeedItem extends StatelessWidget {
       Future.microtask(() => provider.loadMorePosts());
     }
 
-    if (postIndex < totalPosts) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(10, 1, 10, 1),
-        child: Post_One_Widget(
-          post: provider.posts[postIndex],
-          currentUserId: provider.userId,
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 1, 10, 1),
+      child: Post_One_Widget(
+        post: provider.posts[postIndex],
+        currentUserId: provider.userId,
+      ),
+    );
   }
 }
 
@@ -544,7 +601,10 @@ class _IntercalatedWidget extends StatelessWidget {
           builder: () => Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Promotions_Carousel_Widget(
-              products: provider.products.where((p) => p.scope == 'global').take(5).toList(),
+              products: provider.products
+                  .where((p) => p.scope == 'global')
+                  .take(5)
+                  .toList(),
               onProductTap: (product) {},
             ),
           ),
@@ -725,65 +785,78 @@ class _IntercalatedWidget extends StatelessWidget {
 Widget _lazyWidget(
   BuildContext context, {
   required bool isEmpty,
-  required VoidCallback load,
+  required Future<void> Function() load,
   required Widget Function() builder,
   double height = 100,
 }) {
-  if (isEmpty) {
-    load();
+  return _LazyFeedSlot(
+    isEmpty: isEmpty,
+    load: load,
+    builder: builder,
+    height: height,
+  );
+}
+
+/// Carga diferida de un widget intercalado. Muestra shimmer solo mientras la
+/// carga esta en curso; si el provider termina sin datos, se oculta en lugar
+/// de dejar un shimmer permanente.
+class _LazyFeedSlot extends StatefulWidget {
+  final bool isEmpty;
+  final Future<void> Function() load;
+  final Widget Function() builder;
+  final double height;
+
+  const _LazyFeedSlot({
+    required this.isEmpty,
+    required this.load,
+    required this.builder,
+    required this.height,
+  });
+
+  @override
+  State<_LazyFeedSlot> createState() => _LazyFeedSlotState();
+}
+
+class _LazyFeedSlotState extends State<_LazyFeedSlot> {
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LazyFeedSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isEmpty && !oldWidget.isEmpty) {
+      _startLoad();
+    }
+  }
+
+  void _startLoad() {
+    if (!widget.isEmpty || _loading) return;
+    _loading = true;
+    widget.load().whenComplete(() {
+      if (mounted) setState(() => _loading = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isEmpty) return widget.builder();
+    if (!_loading) return const SizedBox.shrink();
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
       child: Container(
-        height: height,
+        height: widget.height,
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
         ),
       ),
-    );
-  }
-  return builder();
-}
-
-class _NotificationBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final unreadCount = context.watch<NotificationProvider>().unreadCount;
-    return Stack(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          child: const Icon(Icons.notifications_outlined,
-              color: Colors.grey, size: 24),
-        ),
-        if (unreadCount > 0)
-          Positioned(
-            top: 2,
-            right: 2,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
-              child: Text(
-                unreadCount > 9 ? '9+' : '$unreadCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/core/models/product-model.dart';
+import 'package:medident/core/models/clinic-model.dart';
 import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/models/user-model.dart';
 import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
+import 'package:medident/core/providers/dentist/dentist-main-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/domain/agenda-provider.dart';
@@ -13,8 +15,10 @@ import 'package:medident/screens/role/dentist/clinic/widgets/clinic-feed-tab.dar
 import 'package:medident/screens/role/dentist/clinic/widgets/clinic-turnos-tab.dart';
 import 'package:medident/screens/role/dentist/clinic/widgets/clinic-historial-tab.dart';
 import 'package:medident/screens/role/dentist/clinic/widgets/clinic-posts-tab.dart';
+import 'package:medident/screens/role/dentist/clinic/patients/patient-list-screen.dart';
 import 'package:medident/screens/shared/widgets/agenda-tab.dart';
 import 'package:medident/screens/role/dentist/clinic/widgets/clinic_header_widget.dart';
+import 'package:medident/screens/widgets/new-post/create_newposts_widget.dart';
 
 class DentistClinic_Dashboard extends StatefulWidget {
   const DentistClinic_Dashboard({super.key});
@@ -32,7 +36,7 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -43,12 +47,52 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
     super.dispose();
   }
 
+  void _openCreateContent(
+    BuildContext context, {
+    required UserModel? user,
+    required String clinicId,
+    ClinicModel? clinic,
+  }) {
+    if (clinicId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Necesitas una clínica cargada para publicar.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    DentistMainProvider? main;
+    try {
+      main = context.read<DentistMainProvider>();
+    } catch (_) {
+      main = null;
+    }
+
+    // Regla de Oro 1: todo lo publicado desde Clinic sale con la identidad de
+    // la clínica (nombre + logo), nunca con la del usuario autenticado.
+    showCreatePostSheet(
+      context,
+      userId: clinicId,
+      userName: clinic?.name ?? 'Clínica',
+      userPhoto: clinic?.logoUrl,
+      clinicId: clinicId,
+      authorUserId: user?.uid,
+      onPublished: () {
+        main?.homeProvider?.refreshAll();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final clinicId = context.select<DentistClinicProvider, String>((p) => p.clinic?.id ?? '');
     final clinicPromos = context.select<DentistClinicProvider, List<ProductModel>>((p) => p.promotions);
     final clinicTreatments = context.select<DentistClinicProvider, List<TreatmentModel>>((p) => p.treatments);
     final isOwner = context.select<DentistClinicProvider, bool>((p) => p.isOwner);
+    final canManageAgenda = context.select<DentistClinicProvider, bool>((p) => p.canManageAgenda);
+    final clinic = context.select<DentistClinicProvider, ClinicModel?>((p) => p.clinic);
     final user = context.select<AuthenticateProvider, UserModel?>((p) => p.user);
 
     if (clinicId.isNotEmpty && _lastClinicId != clinicId) {
@@ -144,9 +188,10 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
               backgroundColor: context.watch<DentistClinicProvider>().primaryColor,
               automaticallyImplyLeading: false,
               flexibleSpace: FlexibleSpaceBar(
-                background: user != null
+                background: clinic != null
                     ? Clinic_Header_Widget(
                         userModel: user,
+                        clinic: clinic,
                         promotions: promos,
                         treatments: clinicTreatments,
                         isOwner: isOwner,
@@ -158,6 +203,12 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
                             Navigator.pushNamed(context, '/profile');
                           }
                         },
+                        onCreateContentPressed: () => _openCreateContent(
+                          context,
+                          user: user,
+                          clinicId: clinicId,
+                          clinic: clinic,
+                        ),
                       )
                     : const SizedBox.shrink(),
                 collapseMode: CollapseMode.parallax,
@@ -168,17 +219,20 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
                   color: Colors.white,
                     child: TabBar(
                     controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     indicatorColor: context.watch<DentistClinicProvider>().primaryColor,
                     indicatorWeight: 2.5,
                     labelColor: context.watch<DentistClinicProvider>().primaryColor,
                     unselectedLabelColor: Colors.grey[400],
                     labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                    tabs: const [
-                      Tab(text: 'Inicio'),
-                      Tab(text: 'Agendas'),
-                      Tab(text: 'Turnos'),
-                      Tab(text: 'Historial'),
-                      Tab(text: 'Posts'),
+                    tabs: [
+                      const Tab(text: 'Inicio'),
+                      const Tab(text: 'Agendas'),
+                      const Tab(text: 'Turnos'),
+                      const Tab(text: 'Pacientes'),
+                      const Tab(text: 'Historial'),
+                      const Tab(text: 'Posts'),
                     ],
                   ),
                 ),
@@ -195,8 +249,9 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
             controller: _tabController,
             children: [
               ClinicFeedTab(clinicId: clinicId),
-              AgendaTab_Screen(clinicId: clinicId),
-              const ClinicTurnosTab(),
+              AgendaTab_Screen(clinicId: clinicId, canManage: canManageAgenda),
+              ClinicTurnosTab(isOwner: isOwner, canManage: canManageAgenda),
+              const PatientListScreen(embedInNestedScroll: true),
               const ClinicHistorialTab(),
               const ClinicPostsTab(),
             ],

@@ -4,6 +4,9 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:medident/main_export.dart';
+import 'package:medident/screens/role/dentist/home/widgets/medident_collapsing_bar.dart';
+import 'package:medident/screens/widgets/shared/clinic-connect-screen.dart';
+import 'package:medident/screens/widgets/shared/clinics-promotion-card.dart';
 
 class DoctorHomeMobile extends StatefulWidget {
   final String userId;
@@ -16,6 +19,15 @@ class DoctorHomeMobile extends StatefulWidget {
 
 class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<DoctorMainProvider>().initializeSection('clinic');
+    });
+  }
 
   @override
   void dispose() {
@@ -38,6 +50,18 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
         [];
     final doctorName = data['fullName'] as String? ?? 'Doctor';
     final globalPromotions = provider.globalPromotions;
+    final user = context.watch<AuthenticateProvider>().user;
+    final unread = context.watch<NotificationProvider>().unreadCount;
+    final carouselItems = globalPromotions
+        .map((promo) => MedidentCarouselItem.fromProduct(
+              promo,
+              promoterName: doctorName,
+              promoterRole: 'Doctor verificado',
+              promoterAvatar: user?.imageUrl ?? '',
+              promoterUid: widget.userId,
+              onCtaPressed: () {},
+            ))
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -46,9 +70,32 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            _buildAppBar(doctorName),
+            MedidentCollapsingBar(
+              collapsedTitle: 'Medident',
+              expandedHeight: 420,
+              isLoading: isLoading && globalPromotions.isEmpty,
+              userProfile: MedidentBrandProfile(
+                storeOrUserName: 'Dr(a). $doctorName',
+                roleOrCity: 'Doctor verificado',
+                avatarUrl: user?.imageUrl ?? '',
+                uid: widget.userId,
+              ),
+              carouselItems: carouselItems,
+              notificationBadgeCount: unread,
+              scrollController: _scrollController,
+              onNotificationPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationScreen()),
+              ),
+              onSearchPressed: () {},
+              onScannerPressed: () {},
+              onCarouselItemTapped: (_) {},
+              onProfileCardTapped: (_) {},
+            ),
             _buildQuickActions(),
-            _buildGlobalPromotions(globalPromotions),
+            _buildClinicBanner(),
+            const SliverToBoxAdapter(child: ClinicsPromotionCard()),
             _buildTodayStats(appointments),
             if (isLoading) ...[
               _buildShimmerSection(),
@@ -66,38 +113,58 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     );
   }
 
-  Widget _buildAppBar(String doctorName) {
+  Widget _buildClinicBanner() {
+    final main = context.read<DoctorMainProvider>();
+    final clinicProvider = main.clinicProvider;
+    if (clinicProvider == null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
     return SliverToBoxAdapter(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
-        decoration: const BoxDecoration(
-          gradient:
-              LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Bienvenido,',
-                    style: TextStyle(color: Colors.white70, fontSize: 16)),
-                Text('Dr(a). $doctorName',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold)),
-              ],
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const NotificationScreen()),
+      child: ListenableBuilder(
+        listenable: clinicProvider,
+        builder: (context, _) {
+          final clinic = clinicProvider.clinic;
+          final hasClinic = clinic != null;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Card(
+              color: Colors.white,
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF1565C0).withOpacity(0.1),
+                  child: const Icon(Icons.local_hospital,
+                      color: Color(0xFF1565C0)),
+                ),
+                title: Text(
+                  hasClinic ? clinic.name : 'Sin clinica vinculada',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  hasClinic
+                      ? (clinicProvider.isOwner
+                          ? 'Propietario (CEO)'
+                          : 'Miembro del equipo')
+                      : 'Crea o unite con un codigo',
+                ),
+                trailing: TextButton(
+                  onPressed: () => _openClinic(clinicProvider),
+                  child: Text(hasClinic ? 'Ver' : 'Vincular'),
+                ),
               ),
-              child: _NotificationBadge(),
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openClinic(DentistClinicProvider clinicProvider) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClinicConnectScreen(
+          userId: widget.userId,
+          clinicProvider: clinicProvider,
         ),
       ),
     );
@@ -401,57 +468,6 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
     );
   }
 
-  Widget _buildGlobalPromotions(List<ProductModel> promos) {
-    if (promos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: SizedBox(
-          height: 140,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: promos.length,
-            itemBuilder: (context, index) {
-              final promo = promos[index];
-              return Container(
-                width: 260,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(promo.name,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    if (promo.description.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(promo.description,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                    ],
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildShimmerSection() {
     return SliverToBoxAdapter(
       child: Padding(
@@ -489,49 +505,6 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final unreadCount = context.watch<NotificationProvider>().unreadCount;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12)),
-      child: Stack(
-        children: [
-          const Icon(Icons.notifications, color: Colors.white, size: 24),
-          if (unreadCount > 0)
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 18,
-                  minHeight: 18,
-                ),
-                child: Text(
-                  unreadCount > 9 ? '9+' : '$unreadCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

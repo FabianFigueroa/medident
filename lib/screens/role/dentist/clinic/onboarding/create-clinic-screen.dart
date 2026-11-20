@@ -1,13 +1,17 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
 
 
 class CreateClinicScreen extends StatefulWidget {
-  const CreateClinicScreen({super.key});
+  final String? userId;
+  final VoidCallback? onCreated;
+
+  const CreateClinicScreen({super.key, this.userId, this.onCreated});
 
   @override
   State<CreateClinicScreen> createState() => _CreateClinicScreenState();
@@ -27,6 +31,7 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
   final _descriptionCtrl = TextEditingController();
 
   String? _logoPath;
+  XFile? _logoFile;
   bool _isLoading = false;
   String? _errorMsg;
 
@@ -310,7 +315,34 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512);
     if (picked != null) {
-      setState(() => _logoPath = picked.path);
+      setState(() {
+        _logoFile = picked;
+        _logoPath = picked.path;
+      });
+    }
+  }
+
+  Future<String?> _uploadLogo(String userId) async {
+    final file = _logoFile;
+    if (file == null) return null;
+    try {
+      final bytes = await file.readAsBytes();
+      final rawName = file.name;
+      final ext = rawName.contains('.')
+          ? rawName.split('.').last.toLowerCase()
+          : 'jpg';
+      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+      final ref = FirebaseStorage.instance.ref(
+        'clinics/$userId/logo_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      await ref.putData(
+        bytes,
+        SettableMetadata(contentType: contentType),
+      );
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('[CREATE_CLINIC] Error subiendo logo: $e');
+      return null;
     }
   }
 
@@ -509,16 +541,16 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
       final cp = context.read<DentistClinicProvider>();
       debugPrint('[CREATE_CLINIC] DentistClinicProvider obtenido: ${cp.hashCode}');
 
-      final main = context.read<DentistMainProvider>();
-      debugPrint('[CREATE_CLINIC] DentistMainProvider obtenido');
-      debugPrint('[CREATE_CLINIC] userId: ${main.userId}');
+      final main = widget.userId == null ? context.read<DentistMainProvider>() : null;
+      final userId = widget.userId ?? main!.userId;
+      debugPrint('[CREATE_CLINIC] userId: $userId');
 
-      if (main.userId.isEmpty) {
+      if (userId.isEmpty) {
         setState(() {
           _isLoading = false;
-          _errorMsg = 'Error de sesión: no se pudo identificar al usuario.';
+          _errorMsg = 'Error de sesi��n: no se pudo identificar al usuario.';
         });
-        debugPrint('[CREATE_CLINIC] userId vacío');
+        debugPrint('[CREATE_CLINIC] userId vac��o');
         return;
       }
 
@@ -544,10 +576,14 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
         }
       }
 
+      debugPrint('[CREATE_CLINIC] Subiendo logo...');
+      final logoUrl = await _uploadLogo(userId);
+      debugPrint('[CREATE_CLINIC] logoUrl: $logoUrl');
+
       debugPrint('[CREATE_CLINIC] Llamando cp.createClinic()...');
       final success = await cp.createClinic(
         name: _nameCtrl.text.trim(),
-        ownerId: main.userId,
+        ownerId: userId,
         nit: _nitCtrl.text.trim(),
         address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
         phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
@@ -556,7 +592,7 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
         socialMedia: socialMedia,
         businessHours: businessHours,
         description: _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim(),
-        logoUrl: null,
+        logoUrl: logoUrl,
       );
       debugPrint('[CREATE_CLINIC] createClinic() retornó: $success');
       debugPrint('[CREATE_CLINIC] cp.error: ${cp.error}');
@@ -565,8 +601,9 @@ class _CreateClinicScreenState extends State<CreateClinicScreen> {
       setState(() => _isLoading = false);
 
       if (success && mounted) {
-        debugPrint('[CREATE_CLINIC] Éxito — inicializando seccion clinic');
-        main.initializeSection('clinic');
+        debugPrint('[CREATE_CLINIC] �%xito �?" inicializando seccion clinic');
+        main?.initializeSection('clinic');
+        widget.onCreated?.call();
         if (mounted) {
           debugPrint('[CREATE_CLINIC] Haciendo pop al dashboard');
           Navigator.pop(context);

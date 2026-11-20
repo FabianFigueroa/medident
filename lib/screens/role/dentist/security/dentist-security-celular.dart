@@ -1,11 +1,10 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:hugeicons/hugeicons.dart';
 import 'package:medident/main_export.dart';
 import 'package:medident/core/utils/app-constant.dart';
 import 'package:medident/core/utils/app-textstyle.dart';
+import 'package:medident/core/widgets/app_card.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-stats.dart';
-import 'package:medident/screens/role/dentist/security/widgets/dentist-security-settings.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-alerts.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-info-section.dart' hide Device;
@@ -16,35 +15,19 @@ class DentistSecurityCelular extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('═══════════════════════════════════════════════════════════════');
-    debugPrint('[DentistSecurityCelular] build() iniciado');
-    
     final provider = context.watch<DentistSecurityProvider>();
-    debugPrint('[DentistSecurityCelular] Provider obtenido: ${provider.uid}');
-    debugPrint('[DentistSecurityCelular] isLoading: ${provider.isLoading}');
-    debugPrint('[DentistSecurityCelular] Error: ${provider.error}');
-    
     final profile = provider.securityData;
-    debugPrint('[DentistSecurityCelular] securityData null: ${profile == null}');
 
     if (profile == null) {
-      debugPrint('[DentistSecurityCelular] Profile nulo, mostrando loading...');
       return const Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    
-    debugPrint('[DentistSecurityCelular] Profile cargado correctamente');
-    debugPrint('[DentistSecurityCelular] UserId del profile: ${profile.userId}');
 
     final bool isRegisteringCard = profile.isRegisteringCard;
     final String? scannedRfidCardId = profile.scannedRfidCardId;
     final bool isAssigningRfidCard = profile.isAssigningRfidCard;
-
-    debugPrint('[DentistSecurityCelular] Tarjeta registrándose: $isRegisteringCard');
-    debugPrint('[DentistSecurityCelular] RFID escaneado: $scannedRfidCardId');
-    debugPrint('[DentistSecurityCelular] Asignando RFID: $isAssigningRfidCard');
 
     final List<Map<String, dynamic>> allDevices = [];
     allDevices.addAll(profile.lights.map((d) => ({'type': 'lights', 'device': d})));
@@ -53,12 +36,6 @@ class DentistSecurityCelular extends StatelessWidget {
     allDevices.addAll(profile.tvs.map((d) => ({'type': 'tvs', 'device': d})));
     allDevices.addAll(profile.voices.map((d) => ({'type': 'voices', 'device': d})));
     allDevices.addAll(profile.doors.map((d) => ({'type': 'doors', 'device': d})));
-
-    debugPrint('[DentistSecurityCelular] Total dispositivos: ${allDevices.length}');
-    debugPrint('[DentistSecurityCelular] Lights: ${profile.lights.length}, Fans: ${profile.fans.length}, Airs: ${profile.airs.length}');
-    debugPrint('[DentistSecurityCelular] TVs: ${profile.tvs.length}, Voices: ${profile.voices.length}, Doors: ${profile.doors.length}');
-    
-    debugPrint('[DentistSecurityCelular] Construyendo UI...');
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -134,7 +111,7 @@ class DentistSecurityCelular extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('📋 Bitácora de Seguridad', style: AppTextStyles.headlineSmall),
+                  Text('Bitácora de Seguridad', style: AppTextStyles.headlineSmall),
                   const SizedBox(height: AppConstants.paddingS),
                   _buildSecurityEventsList(context),
                   const SizedBox(height: AppConstants.paddingL),
@@ -148,46 +125,38 @@ class DentistSecurityCelular extends StatelessWidget {
     );
   }
   
-  // --- NUEVO WIDGET DE CONTROL LED ---
+  // --- CONTROL LED ---
   Widget _buildLedControlSection(BuildContext context, DentistSecurityProvider provider) {
-    debugPrint('[DentistSecurityCelular._buildLedControlSection] Construyendo sección LED');
     final String? selectedOption = provider.dentistSecurityModel?.activeLedOption;
-    debugPrint('[DentistSecurityCelular._buildLedControlSection] Opción LED seleccionada: $selectedOption');
 
     return SliverToBoxAdapter(
-      child: Card(
+      child: AppCard(
         margin: const EdgeInsets.all(AppConstants.paddingS),
-        elevation: AppConstants.elevationS,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusM)),
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.paddingM),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Control Tira LED', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: AppConstants.paddingM),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildLedOptionButton(context, provider, 'Modo 1', 'led_option_1', Icons.looks_one_rounded, selectedOption),
-                  _buildLedOptionButton(context, provider, 'Modo 2', 'led_option_2', Icons.looks_two_rounded, selectedOption),
-                  _buildLedOptionButton(context, provider, 'Modo 3', 'led_option_3', Icons.looks_3_rounded, selectedOption),
-                ],
-              ),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Control Tira LED', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: AppConstants.paddingM),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildLedOptionButton(context, provider, 'Modo 1', 'led_option_1', Icons.looks_one_rounded, selectedOption),
+                _buildLedOptionButton(context, provider, 'Modo 2', 'led_option_2', Icons.looks_two_rounded, selectedOption),
+                _buildLedOptionButton(context, provider, 'Modo 3', 'led_option_3', Icons.looks_3_rounded, selectedOption),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
-  
+
   Widget _buildLedOptionButton(BuildContext context, DentistSecurityProvider provider, String label, String optionKey, IconData icon, String? selectedOption) {
     final bool isSelected = selectedOption == optionKey;
 
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          // Si el botón ya está seleccionado, lo deselecciona (apaga). Si no, lo selecciona.
           final newOption = isSelected ? null : optionKey;
           provider.updateActiveLedOption(newOption);
         },
@@ -226,7 +195,6 @@ class DentistSecurityCelular extends StatelessWidget {
     );
   }
 
-
   Widget _buildDeviceGrid(BuildContext context, DentistSecurityProvider provider, List<Map<String, dynamic>> devices) {
     if (devices.isEmpty) {
       return SliverToBoxAdapter(
@@ -234,7 +202,7 @@ class DentistSecurityCelular extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(AppConstants.paddingXXL),
             child: Text(
-              'No hay dispositivos.\nPresiona el botón de arriba para añadir uno.',
+              'No hay dispositivos.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey600),
             ),
@@ -242,7 +210,7 @@ class DentistSecurityCelular extends StatelessWidget {
         ),
       );
     }
-    
+
     return SliverPadding(
       padding: const EdgeInsets.all(AppConstants.paddingL),
       sliver: SliverGrid(
@@ -264,10 +232,7 @@ class DentistSecurityCelular extends StatelessWidget {
   }
 
   Widget _buildDeviceCard(BuildContext context, DentistSecurityProvider provider, String deviceType, Device device) {
-    debugPrint('[DentistSecurityCelular._buildDeviceCard] Construyendo tarjeta para: $deviceType - ${device.name}');
     final bool isOn = device.isOn;
-    debugPrint('[DentistSecurityCelular._buildDeviceCard] Estado: $isOn');
-    
     final Map<String, IconData> icons = {
       'lights': Icons.lightbulb_outline_rounded,
       'fans': Icons.wind_power_outlined,
@@ -276,7 +241,6 @@ class DentistSecurityCelular extends StatelessWidget {
       'voices': Icons.record_voice_over_rounded,
       'doors': Icons.door_front_door_outlined,
     };
-    
     final IconData icon = icons[deviceType] ?? Icons.device_unknown_rounded;
     final Color activeColor = AppColors.primary;
 
@@ -285,7 +249,7 @@ class DentistSecurityCelular extends StatelessWidget {
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
         color: isOn ? activeColor.withOpacity(0.1) : AppColors.white,
-        borderRadius: BorderRadius.circular(AppConstants.radiusM), // Usar radiusM
+        borderRadius: BorderRadius.circular(AppConstants.radiusS),
         border: Border.all(color: isOn ? activeColor : AppColors.grey300, width: 1.5),
         boxShadow: [
           BoxShadow(
@@ -298,31 +262,21 @@ class DentistSecurityCelular extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppConstants.radiusM),
-          onTap: () {
-            debugPrint('[DentistSecurityCelular._buildDeviceCard.onTap] Dispositivo tocado: $deviceType - ${device.name}');
-            debugPrint('[DentistSecurityCelular._buildDeviceCard.onTap] Cambiando estado de $isOn a ${!isOn}');
-            provider.updateUserDeviceState(deviceType, device.id, !isOn);
-          },
+          borderRadius: BorderRadius.circular(AppConstants.radiusS),
+          onTap: () => provider.updateUserDeviceState(deviceType, device.id, !isOn),
           child: Padding(
             padding: const EdgeInsets.all(AppConstants.paddingM),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [ 
+              children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(
-                      icon,
-                      size: AppConstants.iconL, // Usar iconL
-                      color: isOn ? activeColor : AppColors.grey600,
-                    ),
+                    Icon(icon, size: AppConstants.iconL, color: isOn ? activeColor : AppColors.grey600),
                     Switch(
                       value: isOn,
-                      onChanged: (newState) {
-                        provider.updateUserDeviceState(deviceType, device.id, newState);
-                      },
+                      onChanged: (newState) => provider.updateUserDeviceState(deviceType, device.id, newState),
                       activeColor: activeColor,
                       inactiveTrackColor: AppColors.grey300,
                       inactiveThumbColor: AppColors.grey500,
@@ -355,78 +309,65 @@ class DentistSecurityCelular extends StatelessWidget {
 
   Widget _buildRfidCardManagement(BuildContext context, DentistSecurityProvider provider,
       bool isRegisteringCard, String? scannedRfidCardId, bool isAssigningRfidCard) {
-    debugPrint('[DentistSecurityCelular._buildRfidCardManagement] Construyendo gestión RFID');
-    debugPrint('[DentistSecurityCelular._buildRfidCardManagement] isRegisteringCard: $isRegisteringCard');
-    debugPrint('[DentistSecurityCelular._buildRfidCardManagement] scannedRfidCardId: $scannedRfidCardId');
-    debugPrint('[DentistSecurityCelular._buildRfidCardManagement] isAssigningRfidCard: $isAssigningRfidCard');
-    
     final rfidCards = provider.rfidCards;
-    debugPrint('[DentistSecurityCelular._buildRfidCardManagement] Total tarjetas RFID: ${rfidCards.length}');
 
-    return Card(
-      elevation: AppConstants.elevationS,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusM)), // Usar radiusM
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Tarjetas RFID Registradas', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
-                ElevatedButton.icon(
-                  icon: Icon(isRegisteringCard ? Icons.mic_off : Icons.nfc_rounded, color: AppColors.white),
-                  label: Text(isRegisteringCard ? 'Desactivar' : 'Activar', style: AppTextStyles.labelLarge.copyWith(color: AppColors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isRegisteringCard ? AppColors.error : AppColors.secondary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusXS)), // Usar radiusXS
-                  ),
-                  onPressed: () => provider.setCardRegistrationMode(!isRegisteringCard),
+    return AppCard(
+      margin: const EdgeInsets.all(AppConstants.paddingS),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Tarjetas RFID Registradas', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
+              ElevatedButton.icon(
+                icon: Icon(isRegisteringCard ? Icons.mic_off : Icons.nfc_rounded, color: AppColors.white),
+                label: Text(isRegisteringCard ? 'Desactivar' : 'Activar', style: AppTextStyles.labelLarge.copyWith(color: AppColors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isRegisteringCard ? AppColors.error : AppColors.secondary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusXS)),
                 ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-            
-            if (scannedRfidCardId != null && isAssigningRfidCard) // Si hay una tarjeta escaneada esperando asignación
-              _buildAssignScannedRfidCard(context, provider, scannedRfidCardId)
-            else if (rfidCards.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingM),
-                child: Center(
-                  child: Text(
-                    'No hay tarjetas RFID registradas aún.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey600, fontStyle: FontStyle.italic),
-                  ),
-                ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: rfidCards.length,
-                itemBuilder: (context, index) {
-                  final card = rfidCards[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: AppConstants.paddingXS),
-                    elevation: AppConstants.elevationS, // Usar elevationXS
-                    color: AppColors.surface,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusS)), // Usar radiusS
-                    child: ListTile(
-                      leading: const Icon(Icons.credit_card_rounded, color: AppColors.primary, size: AppConstants.iconM),
-                      title: Text(card.assignedTo, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-                      subtitle: Text('ID: ${card.cardId}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey700)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: AppConstants.iconM),
-                        onPressed: () => _confirmDeleteRfidCard(context, provider, card.cardId, card.assignedTo),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () => provider.setCardRegistrationMode(!isRegisteringCard),
               ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: AppConstants.paddingM),
+
+          if (scannedRfidCardId != null && isAssigningRfidCard)
+            _buildAssignScannedRfidCard(context, provider, scannedRfidCardId)
+          else if (rfidCards.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingM),
+              child: Center(
+                child: Text(
+                  'No hay tarjetas RFID registradas aún.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey600, fontStyle: FontStyle.italic),
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: rfidCards.length,
+              itemBuilder: (context, index) {
+                final card = rfidCards[index];
+                return AppCard(
+                  margin: const EdgeInsets.symmetric(vertical: AppConstants.paddingXS),
+                  child: ListTile(
+                    leading: const Icon(Icons.credit_card_rounded, color: AppColors.primary, size: AppConstants.iconM),
+                    title: Text(card.assignedTo, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                    subtitle: Text('ID: ${card.cardId}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey700)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: AppConstants.iconM),
+                      onPressed: () => _confirmDeleteRfidCard(context, provider, card.cardId, card.assignedTo),
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -520,101 +461,86 @@ class DentistSecurityCelular extends StatelessWidget {
   }
 
   Widget _buildEsp32CamSection(BuildContext context, DentistSecurityProvider provider) {
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Construyendo sección cámara');
     final profile = provider.securityProfile;
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Profile null: ${profile == null}');
-    
     final String? esp32CamIp = profile?.esp32CamIp;
     final bool isCameraActive = profile?.isCameraActive ?? false;
     final Uint8List? lastCameraSnapshot = provider.lastCameraSnapshot;
     final bool isCameraConnected = provider.isCameraConnected;
 
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] IP Cámara: $esp32CamIp');
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Cámara activa: $isCameraActive');
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Cámara conectada: $isCameraConnected');
-    debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Snapshot: $lastCameraSnapshot');debugPrint('[DentistSecurityCelular._buildEsp32CamSection] Snapshot disponible: ${lastCameraSnapshot != null}');
-
-    return Card(
-      elevation: AppConstants.elevationS,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusM)),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Cámara de Seguridad', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
-                IconButton(
-                  icon: const Icon(Icons.settings, color: AppColors.grey700, size: AppConstants.iconM),
-                  onPressed: () => _showEsp32CamConfigDialog(context, provider, esp32CamIp, isCameraActive),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.paddingS),
-            ListTile(
-              leading: Icon(isCameraConnected ? Icons.videocam : Icons.videocam_off, color: isCameraConnected ? AppColors.positive : AppColors.error, size: AppConstants.iconL),
-              title: Text('Estado de la Cámara', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-              subtitle: Text(isCameraConnected ? 'Conectada' : 'Desconectada', style: AppTextStyles.bodyMedium.copyWith(color: isCameraConnected ? AppColors.positive : AppColors.error)),
-              trailing: Switch(
-                value: isCameraActive,
-                onChanged: (newValue) {
-                  provider.setEsp32CamConfig(ipAddress: esp32CamIp, isActive: newValue);
-                },
-                activeColor: AppColors.primary,
+    return AppCard(
+      margin: const EdgeInsets.all(AppConstants.paddingS),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Cámara de Seguridad', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: const Icon(Icons.settings, color: AppColors.grey700, size: AppConstants.iconM),
+                onPressed: () => _showEsp32CamConfigDialog(context, provider, esp32CamIp, isCameraActive),
               ),
+            ],
+          ),
+          const SizedBox(height: AppConstants.paddingS),
+          ListTile(
+            leading: Icon(isCameraConnected ? Icons.videocam : Icons.videocam_off, color: isCameraConnected ? AppColors.positive : AppColors.error, size: AppConstants.iconL),
+            title: Text('Estado de la Cámara', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+            subtitle: Text(isCameraConnected ? 'Conectada' : 'Desconectada', style: AppTextStyles.bodyMedium.copyWith(color: isCameraConnected ? AppColors.positive : AppColors.error)),
+            trailing: Switch(
+              value: isCameraActive,
+              onChanged: (newValue) => provider.setEsp32CamConfig(ipAddress: esp32CamIp, isActive: newValue),
+              activeColor: AppColors.primary,
             ),
-            const SizedBox(height: AppConstants.paddingM),
+          ),
+          const SizedBox(height: AppConstants.paddingM),
 
-            if (lastCameraSnapshot != null && isCameraConnected)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radiusS),
-                child: Image.memory(
-                  lastCameraSnapshot,
-                  width: double.infinity,
+          if (lastCameraSnapshot != null && isCameraConnected)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radiusS),
+              child: Image.memory(
+                lastCameraSnapshot,
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
                   height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 200,
-                    color: AppColors.grey200,
-                    child: Center(child: Icon(Icons.broken_image, size: AppConstants.iconXL, color: AppColors.grey500)),
-                  ),
-                ),
-              )
-            else if (!isCameraActive)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingL),
-                  child: Text(
-                    'La cámara está inactiva.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey600, fontStyle: FontStyle.italic),
-                  ),
-                ),
-              )
-            else
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingL),
-                  child: Column(
-                    children: [
-                      const CircularProgressIndicator(color: AppColors.primary),
-                      const SizedBox(height: AppConstants.paddingS),
-                      Text('Conectando a la cámara...', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey700)),
-                    ],
-                  ),
+                  color: AppColors.grey200,
+                  child: Center(child: Icon(Icons.broken_image, size: AppConstants.iconXL, color: AppColors.grey500)),
                 ),
               ),
-          ],
-        ),
+            )
+          else if (!isCameraActive)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingL),
+                child: Text(
+                  'La cámara está inactiva.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey600, fontStyle: FontStyle.italic),
+                ),
+              ),
+            )
+          else
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingL),
+                child: Column(
+                  children: [
+                    const CircularProgressIndicator(color: AppColors.primary),
+                    const SizedBox(height: AppConstants.paddingS),
+                    Text('Conectando a la cámara...', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.grey700)),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
   void _showEsp32CamConfigDialog(BuildContext context, DentistSecurityProvider provider, String? currentIp, bool currentIsActive) {
     final TextEditingController ipController = TextEditingController(text: currentIp);
-
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -648,23 +574,20 @@ class DentistSecurityCelular extends StatelessWidget {
           ],
         );
       },
-    ).whenComplete(() {
-      ipController.dispose();
-    });
+    ).whenComplete(() => ipController.dispose());
   }
+
   Widget _buildDentistSecurityAppBar() {
     return SliverAppBar(
       pinned: true,
       floating: true,
-      elevation: 2,
+      elevation: AppConstants.elevationS,
       backgroundColor: AppColors.primary,
       title: Text('Seguridad', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.white)),
       actions: [
         IconButton(
           icon: const Icon(Icons.refresh, color: AppColors.white),
-          onPressed: () {
-            // Refresh action
-          },
+          onPressed: () {},
         ),
       ],
     );
@@ -672,8 +595,6 @@ class DentistSecurityCelular extends StatelessWidget {
 
   // --- RESUMEN EJECUTIVO ---
   Widget _buildSecuritySummary(BuildContext context, DentistSecurityProvider provider, DentistSecurityModel profile) {
-    debugPrint('[DentistSecurityCelular._buildSecuritySummary] Construyendo resumen');
-    
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.all(AppConstants.paddingM),
@@ -683,12 +604,12 @@ class DentistSecurityCelular extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(AppConstants.radiusM),
+          borderRadius: BorderRadius.circular(AppConstants.radiusS),
           boxShadow: [
             BoxShadow(
               color: AppColors.primary.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+              blurRadius: AppConstants.elevationL,
+              offset: const Offset(0, AppConstants.elevationM),
             )
           ],
         ),
@@ -697,31 +618,37 @@ class DentistSecurityCelular extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '📊 Resumen de Seguridad',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Icon(Icons.shield_outlined, color: AppColors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Resumen de Seguridad',
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppConstants.paddingM),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildSummaryCard(
-                    icon: '🆔',
+                    icon: Icons.credit_card_outlined,
                     label: 'Tarjetas RFID',
                     value: '${profile.rfidCards.length}',
                     color: AppColors.white,
                   ),
                   _buildSummaryCard(
-                    icon: '🔌',
+                    icon: Icons.devices_outlined,
                     label: 'Dispositivos',
                     value: '${profile.lights.length + profile.fans.length + profile.airs.length + profile.tvs.length + profile.doors.length}',
                     color: AppColors.white,
                   ),
                   _buildSummaryCard(
-                    icon: '✅',
+                    icon: Icons.check_circle_outlined,
                     label: 'Activos',
                     value: '${profile.lights.where((l) => l.isOn).length}',
                     color: AppColors.white,
@@ -736,7 +663,7 @@ class DentistSecurityCelular extends StatelessWidget {
   }
 
   Widget _buildSummaryCard({
-    required String icon,
+    required IconData icon,
     required String label,
     required String value,
     required Color color,
@@ -744,17 +671,11 @@ class DentistSecurityCelular extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          icon,
-          style: const TextStyle(fontSize: 32),
-        ),
+        Icon(icon, size: 32, color: color),
         const SizedBox(height: AppConstants.paddingXS),
         Text(
           value,
-          style: AppTextStyles.headlineSmall.copyWith(
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
+          style: AppTextStyles.headlineSmall.copyWith(color: color, fontWeight: FontWeight.bold),
         ),
         Text(
           label,
@@ -767,9 +688,6 @@ class DentistSecurityCelular extends StatelessWidget {
 
   // --- SECCIÓN DE EMPLEADOS ---
   Widget _buildEmployeesSection(BuildContext context, DentistSecurityModel profile) {
-    debugPrint('[DentistSecurityCelular._buildEmployeesSection] Construyendo sección empleados');
-    debugPrint('[DentistSecurityCelular._buildEmployeesSection] locationId: ${profile.locationId}');
-
     final clinicId = profile.locationId;
 
     return SliverToBoxAdapter(
@@ -780,7 +698,7 @@ class DentistSecurityCelular extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Text('👥', style: TextStyle(fontSize: 20)),
+                Icon(Icons.people_outline, size: 20, color: AppColors.textPrimary),
                 const SizedBox(width: 8),
                 Text('Personal de Turno', style: AppTextStyles.headlineSmall),
                 const Spacer(),
@@ -798,7 +716,7 @@ class DentistSecurityCelular extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: AppColors.positive.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusXS),
                         ),
                         child: Text(
                           '$active/$total',
@@ -831,7 +749,6 @@ class DentistSecurityCelular extends StatelessWidget {
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                     );
                   }
-
                   final docs = snap.data!.docs;
                   if (docs.isEmpty) {
                     return Padding(
@@ -844,7 +761,6 @@ class DentistSecurityCelular extends StatelessWidget {
                       ),
                     );
                   }
-
                   return SizedBox(
                     height: 120,
                     child: ListView.builder(
@@ -858,7 +774,6 @@ class DentistSecurityCelular extends StatelessWidget {
                         final isInClinic = data['isInClinic'] == true;
                         final cardCode = data['assignedCardCode'] as String?;
                         final hasCard = cardCode != null && cardCode.isNotEmpty;
-
                         return _StaffCard(
                           name: name,
                           photoUrl: photoUrl,
@@ -877,6 +792,8 @@ class DentistSecurityCelular extends StatelessWidget {
       ),
     );
   }
+
+  // Removed duplicate methods — new versions exist above in build()
 
   Widget _StaffCard({
     required String name,
@@ -1025,39 +942,37 @@ class DentistSecurityCelular extends StatelessWidget {
   }
 
   Widget _buildSecurityEventsList(BuildContext context) {
-    debugPrint('[DentistSecurityCelular._buildSecurityEventsList] Construyendo bitácora');
-    
     final securityEvents = [
       {
-        'icon': '🆔',
+        'icon': Icons.credit_card_outlined,
         'title': 'Acceso con Tarjeta RFID',
         'subtitle': 'Dr. Roberto Silva - Entrada',
         'time': 'Hace 5 minutos',
         'color': AppColors.positive,
       },
       {
-        'icon': '🚪',
+        'icon': Icons.door_front_door_outlined,
         'title': 'Puerta Desbloqueada',
         'subtitle': 'Puerta Principal - Acceso Manual',
         'time': 'Hace 12 minutos',
         'color': AppColors.secondary,
       },
       {
-        'icon': '💡',
+        'icon': Icons.lightbulb_outline,
         'title': 'Luz Encendida',
         'subtitle': 'Consultorio 1 - Sistema Automático',
         'time': 'Hace 25 minutos',
         'color': AppColors.primary,
       },
       {
-        'icon': '🔴',
+        'icon': Icons.notifications_off_outlined,
         'title': 'Alarma Desactivada',
         'subtitle': 'Sistema General - Dr. Silva',
         'time': 'Hace 1 hora',
         'color': AppColors.error,
       },
       {
-        'icon': '✅',
+        'icon': Icons.sync_outlined,
         'title': 'Sistema Sincronizado',
         'subtitle': 'Todos los valores actualizados',
         'time': 'Hace 2 horas',
@@ -1070,74 +985,58 @@ class DentistSecurityCelular extends StatelessWidget {
         securityEvents.length,
         (index) {
           final event = securityEvents[index];
-          return Container(
+          return AppCard(
             margin: const EdgeInsets.only(bottom: AppConstants.paddingS),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(AppConstants.radiusS),
-              border: Border.all(color: AppColors.grey300),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                )
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.paddingS),
-              child: Row(
-                children: [
-                  Text(
-                    event['icon'] as String,
-                    style: const TextStyle(fontSize: 28),
-                  ),
-                  const SizedBox(width: AppConstants.paddingS),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          event['title'] as String,
-                          style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          event['subtitle'] as String,
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey700),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+            padding: const EdgeInsets.all(AppConstants.paddingS),
+            child: Row(
+              children: [
+                Icon(
+                  event['icon'] as IconData,
+                  size: 28,
+                  color: (event['color'] as Color),
+                ),
+                const SizedBox(width: AppConstants.paddingS),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        event['time'] as String,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey600),
+                        event['title'] as String,
+                        style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.paddingXS,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (event['color'] as Color).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppConstants.radiusXS),
-                        ),
-                        child: Text(
-                          'Registrado',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: event['color'] as Color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      Text(
+                        event['subtitle'] as String,
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey700),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      event['time'] as String,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey600),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXS, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (event['color'] as Color).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppConstants.radiusXS),
+                      ),
+                      child: Text(
+                        'Registrado',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: event['color'] as Color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           );
         },

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:medident/main_export.dart';
 import 'package:medident/screens/role/dentist/clinic/onboarding/create-clinic-screen.dart';
 import 'package:medident/screens/role/dentist/clinic/onboarding/join-clinic-screen.dart';
+import 'package:medident/screens/shared/clinics-explore-screen.dart';
 
 class ClinicOnboardingScreen extends StatefulWidget {
   const ClinicOnboardingScreen({super.key});
@@ -78,6 +79,14 @@ class _ClinicOnboardingScreenState extends State<ClinicOnboardingScreen>
                       description: 'Únete a una clínica existente con el código\n o escaneando el QR.',
                       color: Colors.green,
                       onTap: () => _navigateToJoin(context),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildRoleCard(
+                      icon: HugeIcons.strokeRoundedSearch01,
+                      title: 'Explorar Clínicas',
+                      description: 'Descubre y sigue clínicas para ver\nsus novedades en tu inicio.',
+                      color: const Color(0xFF4F46E5),
+                      onTap: () => _navigateToExplore(context),
                     ),
                     const SizedBox(height: 40),
                   ],
@@ -253,6 +262,13 @@ class _ClinicOnboardingScreenState extends State<ClinicOnboardingScreen>
     } catch (e) {
       debugPrint('[ONBOARDING] ERROR al obtener providers: $e');
     }
+  }
+
+  void _navigateToExplore(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ClinicsExploreScreen()),
+    );
   }
 
   void _navigateToJoin(BuildContext context) {

@@ -404,9 +404,11 @@ class Header_Container_Widget extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _buildStats(
-                            username: userModel.userName ?? '',
+                            username: userModel.userName ?? userModel.fullName,
                             profession: userModel.speciality ?? userModel.role.displayName,
-                            specialty: 'www.doctormontiel.com',
+                            specialty: (userModel.website != null && userModel.website!.isNotEmpty)
+                                ? userModel.website
+                                : null,
                           ),
                         ),
                       ],

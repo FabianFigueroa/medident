@@ -117,13 +117,54 @@ class ClinicService {
     required String userId,
   }) async {
     try {
-      await _firestore.collection('clinics').doc(clinicId).update({
-        'employeeIds': FieldValue.arrayUnion([userId]),
-      });
-      await _firestore.collection('users').doc(userId).update({
-        'clinicId': clinicId,
-        'isClinicOwner': false,
-      });
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data() ?? const <String, dynamic>{};
+      final role = (userData['role'] ?? '').toString();
+      final position = (userData['position'] as String?)?.isNotEmpty == true
+          ? userData['position'] as String
+          : (role == 'dentist' || role == 'doctor'
+              ? 'odontologo_planta'
+              : 'asistente');
+
+      final batch = _firestore.batch();
+      batch.set(
+        _firestore.collection('users').doc(userId),
+        {
+          'clinicId': clinicId,
+          'isClinicOwner': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      batch.set(
+        _firestore.collection('clinics').doc(clinicId),
+        {
+          'employeeIds': FieldValue.arrayUnion([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      batch.set(
+        _firestore
+            .collection('clinics')
+            .doc(clinicId)
+            .collection('employees')
+            .doc(userId),
+        {
+          'uid': userId,
+          'fullName': userData['fullName'] ??
+              userData['userName'] ??
+              '',
+          'imageUrl': userData['imageUrl'] ?? '',
+          'position': position,
+          'isActive': true,
+          'hasSecurityAccess': false,
+          'canManageAgenda': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      await batch.commit();
       return true;
     } catch (e) {
       debugPrint('joinClinic: $e');
@@ -140,12 +181,29 @@ class ClinicService {
     required String description,
     List<String>? imageUrls,
   }) async {
+    String clinicName = 'Clínica';
+    String clinicLogo = '';
+    try {
+      final clinicDoc = await _firestore.collection('clinics').doc(clinicId).get();
+      final data = clinicDoc.data();
+      if (data != null) {
+        final name = (data['name'] as String?)?.trim() ?? '';
+        if (name.isNotEmpty) clinicName = name;
+        clinicLogo = (data['logoUrl'] as String?) ?? '';
+      }
+    } catch (_) {}
+
     final ref = _firestore.collection('posts').doc();
     await ref.set({
       'clinicId': clinicId,
-      'createdBy': createdBy,
-      'userName': userName,
-      'userPhoto': userPhoto ?? '',
+      'createdBy': clinicId,
+      'createdByUserId': createdBy,
+      'userName': clinicName,
+      'userPhoto': clinicLogo,
+      'sourceType': 'clinic',
+      'sourceId': clinicId,
+      'sourceName': clinicName,
+      'sourcePhoto': clinicLogo,
       'type': type,
       'description': description,
       'imageUrls': imageUrls ?? [],
@@ -201,13 +259,32 @@ class ClinicService {
 
   Future<bool> leaveClinic(String clinicId, String userId) async {
     try {
-      await _firestore.collection('clinics').doc(clinicId).update({
-        'employeeIds': FieldValue.arrayRemove([userId]),
-      });
-      await _firestore.collection('users').doc(userId).update({
-        'clinicId': FieldValue.delete(),
-        'isClinicOwner': false,
-      });
+      final batch = _firestore.batch();
+      batch.set(
+        _firestore.collection('clinics').doc(clinicId),
+        {
+          'employeeIds': FieldValue.arrayRemove([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      batch.set(
+        _firestore.collection('users').doc(userId),
+        {
+          'clinicId': FieldValue.delete(),
+          'isClinicOwner': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      batch.delete(
+        _firestore
+            .collection('clinics')
+            .doc(clinicId)
+            .collection('employees')
+            .doc(userId),
+      );
+      await batch.commit();
       return true;
     } catch (e) {
       debugPrint('leaveClinic: $e');
@@ -313,22 +390,21 @@ class ClinicService {
         .snapshots();
   }
 
+  /// Promociones de la clínica. Nunca mezcla promociones personales del dueño
+  /// (Regla de oro 1: el perfil del usuario y el perfil de la clínica son
+  /// entidades separadas).
   Future<List<ProductModel>> getClinicPromotions(String clinicId, String ownerId) async {
     try {
       final snap = await _firestore.collection('promotions')
           .where('clinicId', isEqualTo: clinicId)
           .get();
-      final docs = snap.docs
-          .where((d) => d.data()['isActive'] == true)
-          .map((d) => ProductModel.fromJson(d.data(), d.id))
-          .toList();
-      if (docs.isNotEmpty) return docs;
-      final fallback = await _firestore.collection('promotions')
-          .where('createdBy', isEqualTo: ownerId)
-          .limit(10)
-          .get();
-      return fallback.docs
-          .where((d) => d.data()['isActive'] == true)
+      return snap.docs
+          .where((d) {
+            final data = d.data();
+            final isActive = data['isActive'] == true;
+            final source = data['source'] as String?;
+            return isActive && (source == null || source == 'clinic');
+          })
           .map((d) => ProductModel.fromJson(d.data(), d.id))
           .toList();
     } catch (e) {
@@ -341,7 +417,9 @@ class ClinicService {
     return snap.docs
         .where((d) {
           final data = d.data() as Map<String, dynamic>;
-          return data['isActive'] == true;
+          final source = data['source'] as String?;
+          return data['isActive'] == true &&
+              (source == null || source == 'clinic');
         })
         .map((d) {
           final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
@@ -365,16 +443,10 @@ class ClinicService {
     String ownerId,
   ) async {
     try {
-      final check = await _firestore
+      // Solo promociones propias de la clínica. Sin fallback al dueño.
+      final query = _firestore
           .collection('promotions')
-          .where('clinicId', isEqualTo: clinicId)
-          .where('source', isEqualTo: 'clinic')
-          .limit(1)
-          .get();
-
-      final query = check.docs.isNotEmpty
-          ? _firestore.collection('promotions').where('clinicId', isEqualTo: clinicId).where('source', isEqualTo: 'clinic')
-          : _firestore.collection('promotions').where('createdBy', isEqualTo: ownerId);
+          .where('clinicId', isEqualTo: clinicId);
 
       return query.snapshots().listen(
         (snap) {

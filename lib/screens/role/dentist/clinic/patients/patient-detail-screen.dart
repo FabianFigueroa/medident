@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:medident/screens/role/dentist/widget/layer-odontogram-editor.dart';
 
 class PatientDetailScreen extends StatefulWidget {
@@ -20,11 +21,22 @@ class PatientDetailScreen extends StatefulWidget {
 class _PatientDetailScreenState extends State<PatientDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  PatientModel? _detail;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enrichPatient());
+  }
+
+  Future<void> _enrichPatient() async {
+    try {
+      final full = await context
+          .read<DentistClinicProvider>()
+          .getPatientDetail(widget.patient.id);
+      if (mounted && full != null) setState(() => _detail = full);
+    } catch (_) {}
   }
 
   @override
@@ -33,9 +45,63 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     super.dispose();
   }
 
+  void _showPatientQr(PatientModel patient) {
+    final code = (patient.patientCode ?? '').isNotEmpty
+        ? patient.patientCode!
+        : patient.id;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('QR del paciente',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: QrImageView(
+                data: code,
+                version: QrVersions.auto,
+                size: 220,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(patient.fullName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            SelectableText(code,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    letterSpacing: 1.2)),
+            const SizedBox(height: 6),
+            Text('Muéstralo en recepción para agendar más rápido.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final patient = widget.patient;
+    final patient = _detail ?? widget.patient;
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
@@ -50,6 +116,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           style: const TextStyle(fontFamily: 'Ubuntu-Bold', fontSize: 16),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_2, color: AppColors.primary),
+            tooltip: 'QR del paciente',
+            onPressed: () => _showPatientQr(patient),
+          ),
           IconButton(
             icon: const Icon(Icons.account_tree, color: AppColors.primary),
             tooltip: 'Odontograma',
@@ -195,19 +266,33 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
   Widget _buildHistoryTab(PatientModel p) {
     final cp = context.read<DentistClinicProvider>();
     if (cp.clinic == null) return const SizedBox.shrink();
+    final clinicId = cp.clinic!.id;
     return StreamBuilder(
-      stream: cp.streamClinicalRecords(cp.clinic!.id, p.id),
+      stream: cp.streamClinicalRecords(clinicId, p.id),
       builder: (context, AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildShimmerList();
         }
-        final records = snapshot.data?.docs ?? [];
-        if (records.isEmpty) {
+        if (snapshot.hasError) {
+          return _buildHistoryError('${snapshot.error}');
+        }
+        final docs = (snapshot.data?.docs ?? []).where((d) {
+          final cid = d.data()['clinicId'];
+          return cid == null || cid == clinicId;
+        }).toList()
+          ..sort((a, b) {
+            final da = DateTime.tryParse('${a.data()['date']}') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final db = DateTime.tryParse('${b.data()['date']}') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            return db.compareTo(da);
+          });
+        if (docs.isEmpty) {
           return _buildEmptyHistory();
         }
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: records.length + 1,
+          itemCount: docs.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
               return Padding(
@@ -215,7 +300,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 child: Row(
                   children: [
                     Text(
-                      '${records.length} registros',
+                      '${docs.length} registros',
                       style: TextStyle(fontSize: 13, color: AppColors.grey600),
                     ),
                     const Spacer(),
@@ -228,12 +313,39 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 ),
               );
             }
-            final data = records[index - 1].data();
-            final record = ClinicalRecord.fromMap(data, records[index - 1].id);
+            final data = docs[index - 1].data();
+            final record = ClinicalRecord.fromMap(data, docs[index - 1].id);
             return _buildRecordCard(record, p);
           },
         );
       },
+    );
+  }
+
+  Widget _buildHistoryError(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: AppColors.grey300),
+            const SizedBox(height: 12),
+            const Text('No se pudo cargar el historial',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: AppColors.grey500)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -312,6 +424,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           ],
           if (record.procedure != null && record.procedure!.isNotEmpty)
             _recordField('Procedimiento', record.procedure!),
+          if (record.notes != null && record.notes!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _recordField('Notas', record.notes!),
+          ],
           const SizedBox(height: 4),
           Row(
             children: [
@@ -344,10 +460,62 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       ],
       onSelected: (action) {
         final cp = context.read<DentistClinicProvider>();
-        if (action == 'delete') {
+        if (action == 'edit') {
+          _showEditRecordDialog(record, p);
+        } else if (action == 'delete') {
           cp.deleteClinicalRecord(record.id);
         }
       },
+    );
+  }
+
+  void _showEditRecordDialog(ClinicalRecord record, PatientModel p) {
+    final diagnosisCtrl = TextEditingController(text: record.diagnosis ?? '');
+    final treatmentCtrl = TextEditingController(text: record.treatment ?? '');
+    final procedureCtrl = TextEditingController(text: record.procedure ?? '');
+    final notesCtrl = TextEditingController(text: record.notes ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Editar registro clínico',
+            style: TextStyle(fontFamily: 'Ubuntu-Bold', fontSize: 16)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: procedureCtrl, decoration: const InputDecoration(labelText: 'Procedimiento', border: OutlineInputBorder())),
+              const SizedBox(height: 12),
+              TextField(controller: diagnosisCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Diagnóstico', border: OutlineInputBorder())),
+              const SizedBox(height: 12),
+              TextField(controller: treatmentCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Tratamiento', border: OutlineInputBorder())),
+              const SizedBox(height: 12),
+              TextField(controller: notesCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Notas', border: OutlineInputBorder())),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () {
+              final cp = context.read<DentistClinicProvider>();
+              cp.updateClinicalRecord(record.id, {
+                'procedure': procedureCtrl.text.trim().isEmpty ? null : procedureCtrl.text.trim(),
+                'diagnosis': diagnosisCtrl.text.trim().isEmpty ? null : diagnosisCtrl.text.trim(),
+                'treatment': treatmentCtrl.text.trim().isEmpty ? null : treatmentCtrl.text.trim(),
+                'notes': notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Registro actualizado'), backgroundColor: Colors.green),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
     );
   }
 

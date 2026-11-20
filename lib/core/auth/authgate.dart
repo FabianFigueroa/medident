@@ -60,8 +60,8 @@ class AuthGate extends StatelessWidget {
 
     if (user == null) return const SplashScreen(isAuthenticating: true);
 
-    // Vincular FCM token al usuario autenticado
-    NotificationService.setUserId(user.uid);
+    // El registro FCM se hace DIFERIDO en AuthGateProvider (_scheduleFcm):
+    // aquí no se debe disparar getToken/escritura durante el primer frame.
 
     ////////////////////////////////////////////////////////// Si es DENTISTA, le entregamos su MainProvider
     if (user.role == UserRole.dentist) {

@@ -1,12 +1,16 @@
 ﻿import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:medident/core/models/user-model.dart';
 import 'package:medident/core/services/dentist/dentist-profile-service.dart';
+import 'package:medident/core/services/dentist/dentist-home-services.dart';
 
 /// Provider para la sección del perfil del dentista, conectado a Firebase.
 class DentistProfileProvider with ChangeNotifier {
   final String userId;
+  final String? currentUserId;
   final DentistProfileService _dentistProfileService = DentistProfileService();
+  final DentistHomeService _followService = DentistHomeService();
 
   UserModel? _userProfile;
   List<UserModel> _teamMembers = [];
@@ -27,7 +31,7 @@ class DentistProfileProvider with ChangeNotifier {
   StreamSubscription? _servicesSubscription;
   StreamSubscription? _gallerySubscription;
 
-  DentistProfileProvider({required this.userId});
+  DentistProfileProvider({required this.userId, this.currentUserId});
 
   // Getters públicos
   UserModel? get userProfile => _userProfile;
@@ -40,9 +44,39 @@ class DentistProfileProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  /// Alterna el estado de seguir/dejar de seguir
-  void toggleFollow() {
-    _isFollowing = !_isFollowing;
+  /// Alterna el estado de seguir/dejar de seguir en Firestore.
+  Future<void> toggleFollow() async {
+    final me = currentUserId ?? fb.FirebaseAuth.instance.currentUser?.uid;
+    if (me == null || me.isEmpty || me == userId) return;
+    final wasFollowing = _isFollowing;
+    _isFollowing = !wasFollowing;
+    notifyListeners();
+    try {
+      if (wasFollowing) {
+        await _followService.unfollowUser(me, userId);
+      } else {
+        await _followService.followUser(me, userId);
+      }
+    } catch (e) {
+      _isFollowing = wasFollowing;
+      notifyListeners();
+      debugPrint('toggleFollow error: $e');
+    }
+  }
+
+  Future<void> _loadFollowStatus() async {
+    final me = currentUserId ?? fb.FirebaseAuth.instance.currentUser?.uid;
+    if (me == null || me.isEmpty || me == userId) {
+      _isFollowing = false;
+      return;
+    }
+    try {
+      final status = await _followService.checkFollowStatus(me, userId);
+      _isFollowing = status == 'accepted';
+    } catch (e) {
+      debugPrint('loadFollowStatus error: $e');
+      _isFollowing = false;
+    }
     notifyListeners();
   }
 
@@ -58,6 +92,7 @@ class DentistProfileProvider with ChangeNotifier {
       _profileSubscription?.cancel();
       _profileSubscription = _dentistProfileService.streamUserProfile(userId).listen((profile) {
         _userProfile = profile;
+        if (profile != null) unawaited(_loadFollowStatus());
         _markInitialDataReceived();
       }, onError: (e) {
         _error = "Error en el stream del perfil: $e";

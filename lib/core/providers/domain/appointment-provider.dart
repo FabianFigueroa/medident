@@ -49,11 +49,13 @@ class AppointmentProvider extends ChangeNotifier {
     ).toList();
   }
 
+  /// Reinicia las suscripciones en tiempo real (pull-to-refresh).
+  void refresh() => _subscribe();
+
   void _subscribe() {
     _sub?.cancel();
     _isLoading = true;
-    notifyListeners();
-    _sub = _service.streamAppointments().listen(
+    notifyListeners();    _sub = _service.streamAppointments().listen(
       (list) {
         _appointments = list;
         _isLoading = false;

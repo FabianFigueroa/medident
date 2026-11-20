@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('should prepend story to stories and currentUserStories after creation',
+    test('should prepend story to currentUserStories after creation',
         () async {
       // Arrange
       provider.setCurrentUserData(
@@ -63,16 +63,12 @@ void main() {
 
       // Assert
       expect(id, 'story-123');
-      expect(provider.stories, hasLength(1));
-      expect(provider.stories[0].id, 'story-123');
-      expect(provider.stories[0].imageUrl, 'https://example.com/story.jpg');
-      expect(provider.stories[0].userId, 'test-user-1');
-      expect(provider.stories[0].userName, 'Dr. Test');
-
       expect(provider.currentUserStories, hasLength(1));
       expect(provider.currentUserStories[0].id, 'story-123');
       expect(provider.currentUserStories[0].imageUrl,
           'https://example.com/story.jpg');
+      expect(provider.currentUserStories[0].userId, 'test-user-1');
+      expect(provider.currentUserStories[0].userName, 'Dr. Test');
     });
 
     test('should set story as most recent (first in list)', () async {
@@ -91,10 +87,10 @@ void main() {
       );
 
       // Assert most recent is first
-      expect(provider.stories.length, 2);
-      expect(provider.stories[0].imageUrl,
+      expect(provider.currentUserStories.length, 2);
+      expect(provider.currentUserStories[0].imageUrl,
           'https://example.com/story2.jpg');
-      expect(provider.stories[1].imageUrl,
+      expect(provider.currentUserStories[1].imageUrl,
           'https://example.com/story1.jpg');
     });
 

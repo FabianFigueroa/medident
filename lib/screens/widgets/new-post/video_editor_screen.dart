@@ -1,474 +1,284 @@
-import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
-import 'package:medident/screens/widgets/new-post/image_editor_screen.dart';
 
-class VideoEditorResult {
-  final double startTime;
-  final double endTime;
-  final double speed;
-  final String? filterName;
-  final String? textOverlay;
-
-  VideoEditorResult({
-    required this.startTime,
-    required this.endTime,
-    this.speed = 1.0,
-    this.filterName,
-    this.textOverlay,
-  });
-}
+import 'local_video_preview.dart';
+import 'video_trim_result.dart';
+import 'video_trim_service.dart';
 
 class VideoEditorScreen extends StatefulWidget {
-  final String videoPath;
-  final String? thumbnailPath;
+  final String path;
+  final Uint8List bytes;
+  final String name;
+  final Duration? duration;
 
   const VideoEditorScreen({
     super.key,
-    required this.videoPath,
-    this.thumbnailPath,
+    required this.path,
+    required this.bytes,
+    required this.name,
+    this.duration,
   });
 
   @override
   State<VideoEditorScreen> createState() => _VideoEditorScreenState();
 }
 
-class _VideoEditorScreenState extends State<VideoEditorScreen>
-    with SingleTickerProviderStateMixin {
-  late VideoPlayerController _controller;
-  late TabController _tabCtrl;
-  bool _isInitialized = false;
-  bool _isPlaying = false;
+class _VideoEditorScreenState extends State<VideoEditorScreen> {
+  Duration? _duration;
+  RangeValues _range = const RangeValues(0, 1000);
+  bool _busy = false;
 
-  double _startTrim = 0;
-  double _endTrim = 0;
-  double _currentPosition = 0;
-  double _speed = 1.0;
-  FilterPreset _selectedFilter = FilterPreset.original;
-  String? _textOverlay;
-  final _textController = TextEditingController();
+  static const Color _accent = Color(0xFF22D3EE);
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
-    _controller = VideoPlayerController.file(
-      File(widget.videoPath),
-    );
-    _controller.initialize().then((_) {
-      if (!mounted) return;
-      setState(() {
-        _isInitialized = true;
-        _endTrim = _controller.value.duration.inMilliseconds / 1000;
-      });
-      _controller.addListener(_onVideoUpdate);
-    });
+    _duration = widget.duration;
+    _syncRange();
+    if (_duration == null) {
+      _probeDuration();
+    }
   }
 
-  @override
-  void dispose() {
-    _controller.removeListener(_onVideoUpdate);
-    _controller.dispose();
-    _tabCtrl.dispose();
-    _textController.dispose();
-    super.dispose();
-  }
-
-  void _onVideoUpdate() {
-    if (!mounted) return;
+  Future<void> _probeDuration() async {
+    final duration = await probeVideoDuration(widget.path);
+    if (!mounted || duration == null) return;
     setState(() {
-      _currentPosition = _controller.value.position.inMilliseconds / 1000;
-      _isPlaying = _controller.value.isPlaying;
+      _duration = duration;
+      _syncRange();
     });
-    if (_currentPosition >= _endTrim) {
-      _controller.pause();
-    }
   }
 
-  void _togglePlay() {
-    if (_isPlaying) {
-      _controller.pause();
-    } else {
-      _controller.seekTo(Duration(milliseconds: (_startTrim * 1000).round()));
-      _controller.play();
-    }
+  void _syncRange() {
+    final max = _maxMs;
+    if (max <= 0) return;
+    final start = _range.start.clamp(0, max).toDouble();
+    final end = _range.end <= start ? max : _range.end.clamp(0, max).toDouble();
+    _range = RangeValues(start, end);
   }
 
-  void _seekTo(double seconds) {
-    _controller.seekTo(Duration(milliseconds: (seconds * 1000).round()));
+  double get _maxMs {
+    final duration = _duration;
+    if (duration == null) return 1000;
+    final value = duration.inMilliseconds.toDouble();
+    return value <= 0 ? 1000 : value;
+  }
+
+  Duration get _start =>
+      Duration(milliseconds: _range.start.round().clamp(0, _maxMs.round()));
+
+  Duration get _end {
+    final max = _maxMs.round();
+    return Duration(milliseconds: _range.end.round().clamp(0, max));
+  }
+
+  Future<void> _applyTrim() async {
+    final duration = _duration;
+    if (duration == null || _busy) return;
+    final start = _start;
+    final end = _end;
+    if (end - start < const Duration(milliseconds: 500)) {
+      _showError('El recorte debe durar al menos medio segundo.');
+      return;
+    }
+    if (start == Duration.zero && end >= duration) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() => _busy = true);
+    final result = await trimVideo(
+      path: widget.path,
+      bytes: widget.bytes,
+      name: widget.name,
+      start: start,
+      end: end,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!result.hasBytes) {
+      _showError(result.error ?? 'No se pudo recortar el video.');
+      return;
+    }
+    Navigator.pop(context, result);
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final duration = _duration;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0B1220),
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+        backgroundColor: const Color(0xFF0B1220),
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Editar video',
+          style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        title: const Text('Editar video', style: TextStyle(color: Colors.white, fontSize: 16)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context, VideoEditorResult(
-                startTime: _startTrim,
-                endTime: _endTrim,
-                speed: _speed,
-                filterName: _selectedFilter.name == 'Normal' ? null : _selectedFilter.name,
-                textOverlay: _textOverlay,
-              ));
-            },
-            child: const Text('Aplicar', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 15)),
-          ),
-        ],
       ),
-      body: Column(
-        children: [
-          if (_isInitialized) ...[
+      body: SafeArea(
+        child: Column(
+          children: [
             Expanded(
-              child: Center(
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_selectedFilter.matrix),
-                  child: GestureDetector(
-                    onTap: _togglePlay,
-                    child: AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio,
-                      child: Stack(
-                        alignment: Alignment.bottomCenter,
-                        children: [
-                          VideoPlayer(_controller),
-                          if (!_isPlaying)
-                            const Icon(Icons.play_circle, color: Colors.white70, size: 64),
-                          if (_textOverlay != null)
-                            Positioned(
-                              bottom: 40,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _textOverlay!,
-                                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white12),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    LocalVideoPreview(
+                      path: widget.path,
+                      bytes: widget.bytes,
+                      name: widget.name,
+                    ),
+                    if (_busy)
+                      Container(
+                        color: Colors.black54,
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: _accent),
+                              SizedBox(height: 12),
+                              Text(
+                                'Recortando video...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              decoration: const BoxDecoration(
+                color: Color(0xFF111827),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.content_cut_rounded,
+                        color: _accent,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Recortar video',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        _format(_end - _start),
+                        style: const TextStyle(
+                          color: _accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (duration == null)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text(
+                        'No se pudo leer la duración del video. Puedes '
+                        'reemplazarlo o quitarlo desde el editor de publicación.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    )
+                  else ...[
+                    RangeSlider(
+                      values: _range,
+                      min: 0,
+                      max: _maxMs,
+                      activeColor: _accent,
+                      inactiveColor: Colors.white24,
+                      labels: RangeLabels(_format(_start), _format(_end)),
+                      onChanged: _busy
+                          ? null
+                          : (values) => setState(() => _range = values),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Inicio ${_format(_start)}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
                             ),
+                          ),
+                          Text(
+                            'Fin ${_format(_end)}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ),
-              ),
-            ),
-            _buildTrimBar(),
-            const SizedBox(height: 8),
-            _buildPlaybackControls(),
-          ] else
-            const Expanded(
-              child: Center(child: CircularProgressIndicator(color: Colors.white)),
-            ),
-          Container(
-            color: const Color(0xFF1C1C1E),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TabBar(
-                  controller: _tabCtrl,
-                  indicatorColor: Colors.white,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.grey,
-                  isScrollable: true,
-                  tabs: const [
-                    Tab(text: 'Filtros'),
-                    Tab(text: 'Velocidad'),
-                    Tab(text: 'Texto'),
                   ],
-                ),
-                SizedBox(
-                  height: 160,
-                  child: TabBarView(
-                    controller: _tabCtrl,
-                    children: [
-                      _buildFiltersTab(),
-                      _buildSpeedTab(),
-                      _buildTextTab(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrimBar() {
-    final totalDuration = _controller.value.duration.inMilliseconds / 1000;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.black87,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatTime(_startTrim), style: const TextStyle(color: Colors.white70, fontSize: 11)),
-              Text(_formatTime(_endTrim), style: const TextStyle(color: Colors.white70, fontSize: 11)),
-            ],
-          ),
-          RangeSlider(
-            values: RangeValues(_startTrim, _endTrim),
-            min: 0,
-            max: totalDuration,
-            divisions: totalDuration.round(),
-            activeColor: Colors.blue,
-            inactiveColor: Colors.grey[700],
-            onChanged: (values) {
-              setState(() {
-                _startTrim = values.start;
-                _endTrim = values.end;
-              });
-              _seekTo(_startTrim);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaybackControls() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      color: Colors.black87,
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
-            onPressed: _togglePlay,
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderThemeData(
-                activeTrackColor: Colors.blue,
-                inactiveTrackColor: Colors.grey[700],
-                thumbColor: Colors.white,
-                trackHeight: 3,
-              ),
-              child: Slider(
-                value: _currentPosition.clamp(_startTrim, _endTrim),
-                min: _startTrim,
-                max: _endTrim,
-                onChanged: (v) {
-                  _seekTo(v);
-                  setState(() => _currentPosition = v);
-                },
-              ),
-            ),
-          ),
-          Text(
-            '${_formatTime(_currentPosition)} / ${_formatTime(_endTrim)}',
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFiltersTab() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: FilterPreset.all.length,
-        itemBuilder: (_, i) {
-          final f = FilterPreset.all[i];
-          final selected = _selectedFilter.name == f.name;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedFilter = f),
-            child: Container(
-              width: 80,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.grey[900],
-                      border: Border.all(
-                        color: selected ? Colors.white : Colors.transparent,
-                        width: 2,
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: duration == null || _busy ? null : _applyTrim,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _accent,
+                        foregroundColor: const Color(0xFF0B1220),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text(
+                        'Aplicar recorte',
+                        style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    child: Center(
-                      child: ColorFiltered(
-                        colorFilter: ColorFilter.matrix(f.matrix),
-                        child: Icon(Icons.movie, color: Colors.grey[300], size: 32),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    f.name,
-                    style: TextStyle(
-                      color: selected ? Colors.white : Colors.grey[400],
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSpeedTab() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Column(
-        children: [
-          Text('Velocidad: ${_speed}x', style: const TextStyle(color: Colors.white, fontSize: 16)),
-          const SizedBox(height: 12),
-          SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: Colors.blue,
-              inactiveTrackColor: Colors.grey[800],
-              thumbColor: Colors.white,
-              trackHeight: 3,
-            ),
-            child: Slider(
-              value: _speed,
-              min: 0.25,
-              max: 4,
-              divisions: 15,
-              onChanged: (v) {
-                setState(() {
-                  _speed = v;
-                });
-                _controller.setPlaybackSpeed(v);
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _speedChip(0.25, '0.25x'),
-              _speedChip(0.5, '0.5x'),
-              _speedChip(1, '1x'),
-              _speedChip(2, '2x'),
-              _speedChip(4, '4x'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _speedChip(double speed, String label) {
-    final selected = _speed == speed;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _speed = speed);
-        _controller.setPlaybackSpeed(speed);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? Colors.blue : Colors.grey[800],
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.grey[400],
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTextTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _textController,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Texto sobre el video...',
-                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                    filled: true,
-                    fillColor: Colors.grey[800],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.check, color: Colors.blue, size: 20),
-                onPressed: () {
-                  setState(() {
-                    _textOverlay = _textController.text.isNotEmpty ? _textController.text : null;
-                  });
-                },
-              ),
-              if (_textOverlay != null)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                  onPressed: () {
-                    setState(() {
-                      _textOverlay = null;
-                      _textController.clear();
-                    });
-                  },
-                ),
-            ],
-          ),
-          if (_textOverlay != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _textOverlay!,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(double seconds) {
-    final dur = Duration(milliseconds: (seconds * 1000).round());
-    final min = dur.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final sec = dur.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$min:$sec';
+  String _format(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60);
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 }

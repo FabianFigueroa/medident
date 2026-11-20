@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:medident/core/services/patient-service.dart';
 
 class PatientSearchSheet extends StatefulWidget {
   final String clinicId;
@@ -52,7 +54,10 @@ class _PatientSearchSheetState extends State<PatientSearchSheet> {
             'photo': data['imageUrl'] as String? ?? '',
             'phone': data['phoneNumber'] as String? ?? '',
             'email': data['email'] as String? ?? '',
-            'code': data['identificationNumber'] as String? ?? data['uniqueCode'] as String? ?? '',
+            'code': data['patientCode'] as String? ??
+                data['uniqueCode'] as String? ??
+                data['identificationNumber'] as String? ??
+                '',
           };
         }).toList();
         _loaded = true;
@@ -85,10 +90,39 @@ class _PatientSearchSheetState extends State<PatientSearchSheet> {
       final email = (p['email'] as String).toLowerCase();
       final code = (p['code'] as String).toLowerCase();
       final phone = (p['phone'] as String).toLowerCase();
-      if (name.contains(q) || email.contains(q) || code.contains(q) || phone.contains(q)) return true;
+      final uid = (p['uid'] as String).toLowerCase();
+      if (name.contains(q) ||
+          email.contains(q) ||
+          code.contains(q) ||
+          phone.contains(q) ||
+          uid.contains(q)) {
+        return true;
+      }
       final parts = name.split(RegExp(r'[\s,]+'));
       return parts.any((part) => part.startsWith(q));
     }).toList();
+  }
+
+  Future<void> _scanPatientQr() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _PatientQrScannerScreen()),
+    );
+    if (code == null || code.trim().isEmpty) return;
+    final patient = await PatientService()
+        .getPatientByCode(code, clinicId: widget.clinicId);
+    if (!mounted) return;
+    if (patient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El paciente no pertenece a esta clínica'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+    widget.onSelected(patient.id, patient.fullName, patient.photo);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
@@ -126,25 +160,53 @@ class _PatientSearchSheetState extends State<PatientSearchSheet> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _searchCtrl,
-            focusNode: _focusNode,
-            decoration: InputDecoration(
-              hintText: 'Buscar por nombre, email, teléfono o código...',
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey[500]),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: Icon(Icons.clear, size: 18, color: Colors.grey[400]),
-                      onPressed: () { _searchCtrl.clear(); _onSearchChanged(''); },
-                    )
-                  : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              filled: true, fillColor: Colors.grey[50],
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                focusNode: _focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Buscar por nombre, ID, código, email o teléfono...',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                  prefixIcon:
+                      Icon(Icons.search, size: 20, color: Colors.grey[500]),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear,
+                              size: 18, color: Colors.grey[400]),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _onSearchChanged('');
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                onChanged: _onSearchChanged,
+              ),
             ),
-            onChanged: _onSearchChanged,
-          ),
+            const SizedBox(width: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: _scanPatientQr,
+              child: Container(
+                height: 48,
+                width: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.qr_code_scanner_rounded,
+                    color: Color(0xFF0D9488)),
+              ),
+            ),
+          ]),
         ),
         const SizedBox(height: 12),
         Expanded(child: _buildResults()),
@@ -265,6 +327,80 @@ class _PatientSearchSheetState extends State<PatientSearchSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+class _PatientQrScannerScreen extends StatefulWidget {
+  const _PatientQrScannerScreen();
+
+  @override
+  State<_PatientQrScannerScreen> createState() => _PatientQrScannerScreenState();
+}
+
+class _PatientQrScannerScreenState extends State<_PatientQrScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  bool _handled = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Escanear QR del paciente'),
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: (capture) {
+              if (_handled) return;
+              final value = capture.barcodes.firstOrNull?.rawValue;
+              if (value == null || value.trim().isEmpty) return;
+              _handled = true;
+              _controller.stop();
+              Navigator.pop(context, value.trim());
+            },
+          ),
+          Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 40,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                'Apunta la cámara al QR del perfil del paciente',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

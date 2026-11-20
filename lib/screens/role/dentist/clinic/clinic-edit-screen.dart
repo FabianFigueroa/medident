@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:medident/main_export.dart';
 
 class ClinicEditScreen extends StatefulWidget {
@@ -143,11 +145,86 @@ class _ClinicEditScreenState extends State<ClinicEditScreen> {
             const SizedBox(height: 16),
             _buildColorSection(),
             const SizedBox(height: 16),
+            _buildQrSection(),
+            const SizedBox(height: 16),
             _buildServicesSection(),
             const SizedBox(height: 16),
             _buildDangerZone(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildQrSection() {
+    final clinic = _getClinic();
+    final apiKey = clinic?.apiKey ?? '';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Código QR de la clínica',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Este código identifica a la clínica. No es el código del usuario dueño.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          if (apiKey.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('La clínica aún no tiene un código QR generado.'),
+            )
+          else
+            Row(
+              children: [
+                QrImageView(
+                  data: apiKey,
+                  size: 130,
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.all(8),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        clinic?.name.isNotEmpty == true ? clinic!.name : 'Clínica',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectableText(
+                        apiKey,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: apiKey));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Código copiado')),
+                          );
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 16),
+                        label: const Text('Copiar código'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

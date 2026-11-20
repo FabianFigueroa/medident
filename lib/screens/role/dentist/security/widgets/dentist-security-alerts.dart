@@ -1,13 +1,12 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/main_export.dart';
+import 'package:medident/core/utils/app-colors.dart';
+import 'package:medident/core/utils/app-constant.dart';
+import 'package:medident/core/widgets/app_card.dart';
+import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:provider/provider.dart';
 
 class DentistSecurityAlerts extends StatelessWidget {
   const DentistSecurityAlerts({super.key});
-
-  static const _darkText = Color(0xFF1D1D1F);
-  static const _mediumText = Color(0xFF86868B);
-  static const _cardBg = Color(0xFFF5F5F7);
 
   @override
   Widget build(BuildContext context) {
@@ -17,19 +16,19 @@ class DentistSecurityAlerts extends StatelessWidget {
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingM, AppConstants.paddingS, AppConstants.paddingM, AppConstants.paddingM),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Alertas',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: _darkText,
+                    color: AppColors.textPrimary,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -37,15 +36,15 @@ class DentistSecurityAlerts extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF3B30).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.error.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppConstants.radiusXS),
                     ),
                     child: Text(
                       '${provider.unreadAlertsCount} sin leer',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFFFF3B30),
+                        color: AppColors.error,
                       ),
                     ),
                   ),
@@ -53,36 +52,23 @@ class DentistSecurityAlerts extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (displayAlerts.isEmpty)
-              Container(
-                width: double.infinity,
+              AppCard(
                 padding: const EdgeInsets.symmetric(vertical: 32),
-                decoration: BoxDecoration(
-                  color: _cardBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                margin: EdgeInsets.zero,
                 child: Column(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 40, color: const Color(0xFF34C759).withOpacity(0.5)),
+                    Icon(Icons.check_circle_outline, size: 40, color: AppColors.success.withOpacity(0.5)),
                     const SizedBox(height: 8),
-                    const Text('Sin alertas', style: TextStyle(color: _mediumText, fontSize: 15)),
+                    const Text('Sin alertas', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
                   ],
                 ),
               )
             else
               ...displayAlerts.map((alert) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
+                child: AppCard(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: _cardBg,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border(
-                      left: BorderSide(
-                        color: _severityColor(alert.severity),
-                        width: 3,
-                      ),
-                    ),
-                  ),
+                  margin: EdgeInsets.zero,
                   child: Row(
                     children: [
                       Container(
@@ -90,7 +76,7 @@ class DentistSecurityAlerts extends StatelessWidget {
                         height: 36,
                         decoration: BoxDecoration(
                           color: _severityColor(alert.severity).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusXS),
                         ),
                         child: Icon(
                           _severityIcon(alert.severity),
@@ -108,19 +94,19 @@ class DentistSecurityAlerts extends StatelessWidget {
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: _darkText,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                             if (alert.room != null) Text(
                               alert.room!,
-                              style: TextStyle(fontSize: 12, color: _mediumText),
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                             ),
                           ],
                         ),
                       ),
                       Text(
                         _formatTime(alert.timestamp),
-                        style: TextStyle(fontSize: 11, color: _mediumText),
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -134,11 +120,11 @@ class DentistSecurityAlerts extends StatelessWidget {
 
   Color _severityColor(String severity) {
     switch (severity) {
-      case 'critical': return const Color(0xFFFF3B30);
+      case 'critical': return AppColors.error;
       case 'high': return const Color(0xFFFF9500);
       case 'medium': return const Color(0xFFFFCC00);
-      case 'low': return const Color(0xFF34C759);
-      default: return const Color(0xFF86868B);
+      case 'low': return AppColors.success;
+      default: return AppColors.textSecondary;
     }
   }
 

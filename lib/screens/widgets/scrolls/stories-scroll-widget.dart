@@ -45,10 +45,7 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _visibleCount = min(widget.stories.length, _initialBatch);
-    if (widget.currentUserStories.isNotEmpty) {
-      _visibleCount = max(_visibleCount, widget.currentUserStories.length + 1);
-    }
+    _visibleCount = max(min(widget.stories.length + 1, _initialBatch), 1);
   }
 
   @override
@@ -68,8 +65,6 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
     super.dispose();
   }
 
-  bool get hasMyStories => widget.currentUserStories.isNotEmpty;
-
   void _onScroll() {
     if (_scrollController.hasClients &&
         _scrollController.position.pixels >=
@@ -77,7 +72,7 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
       if (widget.hasMore && !widget.isLoadingMore && widget.onLoadMore != null) {
         widget.onLoadMore!();
       }
-      if (_visibleCount < widget.stories.length + 1 + (hasMyStories ? widget.currentUserStories.length : 0)) {
+      if (_visibleCount < widget.stories.length + 1) {
         setState(() => _visibleCount += _scrollBatch);
       }
     }
@@ -86,7 +81,6 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
   @override
   Widget build(BuildContext context) {
     final bool hasStories = widget.stories.isNotEmpty;
-    final bool hasMyStories = widget.currentUserStories.isNotEmpty;
 
     return Container(
       height: 195,
@@ -100,7 +94,6 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
             ? 4
             : min(
                 1 +
-                    (hasMyStories ? widget.currentUserStories.length : 0) +
                     (hasStories ? widget.stories.length : 0) +
                     (widget.hasMore && !widget.isLoadingMore ? 1 : 0),
                 _visibleCount,
@@ -110,13 +103,7 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
             return _shimmerPlaceholder();
           }
           if (index == 0) return _buildMyStoryCard();
-          if (hasMyStories && index <= widget.currentUserStories.length) {
-            return _buildStoryCard(
-              widget.currentUserStories[index - 1],
-              isOwn: true,
-            );
-          }
-          final storiesStart = 1 + (hasMyStories ? widget.currentUserStories.length : 0);
+          final storiesStart = 1;
           if (index >= storiesStart &&
               index < storiesStart + widget.stories.length) {
             return _buildStoryCard(
@@ -193,66 +180,66 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
                 _gradientFallback(isOwn: true),
               // Onda blanca abajo
               _bottomWave(),
-              // Avatar + anillo
+              // Acción principal: "+" grande para crear historia
               Positioned(
-                bottom: 28,
+                bottom: 26,
                 left: 0,
                 right: 0,
                 child: Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Anillo segmentado (solo si tiene stories)
-                      if (hasMyStories)
-                        CustomPaint(
-                          size: const Size(54, 54),
-                          painter: SegmentedRingPainter(
-                            totalSegments: totalStories,
-                            viewedSegments: viewedCount,
-                            activeColor: const Color(0xFF1877F2),
-                            viewedColor: Colors.grey.shade400,
+                  child: GestureDetector(
+                    onTap: widget.onAddStoryTap,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Anillo segmentado (solo si tiene stories)
+                        if (hasMyStories)
+                          CustomPaint(
+                            size: const Size(62, 62),
+                            painter: SegmentedRingPainter(
+                              totalSegments: totalStories,
+                              viewedSegments: viewedCount,
+                              activeColor: const Color(0xFF1877F2),
+                              viewedColor: Colors.grey.shade400,
+                            ),
                           ),
+                        // Botón "+" grande (reemplaza la foto de perfil)
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1877F2),
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    const Color(0xFF1877F2).withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.add_rounded,
+                              color: Colors.white, size: 30),
                         ),
-                      // Foto de perfil
-                      Container(
-                        width: hasMyStories ? 40 : 44,
-                        height: hasMyStories ? 40 : 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: hasMyStories
-                              ? Border.all(color: Colors.white, width: 2)
-                              : null,
-                        ),
-                        padding: const EdgeInsets.all(2),
-                        child: ClipOval(
-                          child: Global_Avatar_Widget(imageUrl: widget.currentUserPhoto, borderRadius: 40,
-                              errorWidget: const Icon(Icons.person, color: Colors.grey, size: 20)),
-                        ),
-                      ),
-                      // Botón "+"
-                      Positioned(
-                        right: hasMyStories ? 0 : 2,
-                        bottom: hasMyStories ? 0 : 2,
-                        child: GestureDetector(
-                          onTap: widget.onAddStoryTap,
+                        // Indicador de usuario activo
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
                           child: Container(
-                            width: hasMyStories ? 18 : 24,
-                            height: hasMyStories ? 18 : 24,
+                            width: 16,
+                            height: 16,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1877F2),
+                              color: const Color(0xFF22C55E),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: hasMyStories ? 10 : 14,
+                              border:
+                                  Border.all(color: Colors.white, width: 2),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -285,7 +272,7 @@ class _StoriesScroll_WidgetState extends State<StoriesScroll_Widget> {
     final bool isViewed = story.isViewed || story.viewedBy.isNotEmpty;
     final String? photoUrl = isOwn
         ? widget.currentUserPhoto
-        : (story.userPhoto ?? widget.currentUserPhoto);
+        : (story.userPhoto ?? '');
     final String name = isOwn
         ? widget.currentUserName
         : (story.userName.isNotEmpty ? story.userName : 'Usuario');

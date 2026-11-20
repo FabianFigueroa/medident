@@ -11,10 +11,16 @@ class NotificationProvider with ChangeNotifier {
   List<NotificationModel> _notifications = [];
   int _unreadCount = 0;
   bool _isLoading = false;
+  bool _disposed = false;
   StreamSubscription? _subscription;
 
-  NotificationProvider({required this.userId}) {
-    _init();
+  NotificationProvider({
+    required this.userId,
+    Duration deferDuration = const Duration(milliseconds: 1500),
+  }) {
+    // Diferido: el stream de notificaciones no compite con el primer frame del
+    // home (patron de arranque rapido de Tenderos).
+    Future<void>.delayed(deferDuration, _init);
   }
 
   List<NotificationModel> get notifications => _notifications;
@@ -25,16 +31,19 @@ class NotificationProvider with ChangeNotifier {
       _notifications.where((n) => n.type == 'follow_request').toList();
 
   void _init() {
+    if (_disposed) return;
     _isLoading = true;
     notifyListeners();
     _subscription = _service.streamNotifications(userId).listen(
       (list) {
+        if (_disposed) return;
         _notifications = list;
         _unreadCount = list.where((n) => !n.isRead).length;
         _isLoading = false;
         notifyListeners();
       },
       onError: (_) {
+        if (_disposed) return;
         _isLoading = false;
         notifyListeners();
       },
@@ -102,6 +111,7 @@ class NotificationProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _subscription?.cancel();
     super.dispose();
   }

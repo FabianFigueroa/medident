@@ -22,8 +22,16 @@ class DentistClinicProvider with ChangeNotifier {
 
   ClinicStatus _status = ClinicStatus.checking;
   ClinicModel? _clinic;
+  String? _currentUserId;
   String? _error;
   bool _isLoading = false;
+  bool _canManageAgenda = false;
+  int _patientsCount = 0;
+  int _employeesCount = 0;
+  int _followersCount = 0;
+  StreamSubscription? _patientsCountSub;
+  StreamSubscription? _employeesCountSub;
+  StreamSubscription? _followersCountSub;
   List<AppointmentModel> _appointments = [];
   List<TreatmentModel> _treatments = [];
   bool _isLoadingAppointments = false;
@@ -93,6 +101,18 @@ class DentistClinicProvider with ChangeNotifier {
   String? get error => _error;
   bool get isLoading => _isLoading;
   bool get isOwner => _status == ClinicStatus.owner;
+  bool get canManageAgenda => isOwner || _canManageAgenda;
+  int get patientsCount => _patientsCount;
+  int get employeesCount => _employeesCount;
+  int get followersCount => _followersCount;
+  int get clinicPostsCount => _clinicFeed.length;
+  int get clinicLikesCount => _clinicFeed.fold<int>(
+      0, (sum, p) => sum + ((p['likesCount'] as num?)?.toInt() ?? 0));
+  int get clinicPhotosCount => _clinicFeed.fold<int>(
+      0,
+      (sum, p) =>
+          sum +
+          (((p['imageUrls'] as List?)?.length) ?? 0));
 
   Color get primaryColor {
     if (_clinic?.primaryColor != null) {
@@ -139,6 +159,7 @@ class DentistClinicProvider with ChangeNotifier {
   }
 
   Future<void> checkClinicStatus(String userId) async {
+    _currentUserId = userId;
     _status = ClinicStatus.checking;
     _error = null;
     notifyListeners();
@@ -162,6 +183,8 @@ class DentistClinicProvider with ChangeNotifier {
         _subscribeToClinicFeed();
         _subscribeToTreatmentConfessions();
         _subscribeToClinicalStories();
+        await _resolveAgendaPermission(userId);
+        _subscribeToStats();
         _saveToCache();
       }
     } catch (e) {
@@ -176,11 +199,13 @@ class DentistClinicProvider with ChangeNotifier {
   void setCachedStatus({required bool isOwner}) {
     _clinic = null;
     _status = isOwner ? ClinicStatus.owner : ClinicStatus.employee;
+    _canManageAgenda = isOwner;
     _error = null;
     notifyListeners();
   }
 
   Future<void> refreshFromClinicId(String clinicId, String userId) async {
+    _currentUserId = userId;
     try {
       final clinic = await _service.getClinic(clinicId);
       if (clinic != null) {
@@ -194,6 +219,8 @@ class DentistClinicProvider with ChangeNotifier {
         _subscribeToClinicFeed();
         _subscribeToTreatmentConfessions();
         _subscribeToClinicalStories();
+        await _resolveAgendaPermission(userId);
+        _subscribeToStats();
         notifyListeners();
       }
     } catch (e) {
@@ -284,6 +311,63 @@ class DentistClinicProvider with ChangeNotifier {
     });
   }
 
+  Future<void> _resolveAgendaPermission(String userId) async {
+    if (_clinic == null) {
+      _canManageAgenda = false;
+      return;
+    }
+    if (_clinic!.ownerId == userId) {
+      _canManageAgenda = true;
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('clinics')
+          .doc(_clinic!.id)
+          .collection('employees')
+          .doc(userId)
+          .get();
+      _canManageAgenda = doc.data()?['canManageAgenda'] as bool? ?? false;
+    } catch (e) {
+      debugPrint('resolveAgendaPermission: $e');
+      _canManageAgenda = false;
+    }
+  }
+
+  void _subscribeToStats() {
+    _patientsCountSub?.cancel();
+    _employeesCountSub?.cancel();
+    _followersCountSub?.cancel();
+    if (_clinic == null) return;
+    final clinicId = _clinic!.id;
+
+    _patientsCountSub = _patientService
+        .streamPatientsByClinic(clinicId)
+        .listen((list) {
+      _patientsCount = list.length;
+      notifyListeners();
+    }, onError: (_) {});
+
+    _employeesCountSub = FirebaseFirestore.instance
+        .collection('clinics')
+        .doc(clinicId)
+        .collection('employees')
+        .snapshots()
+        .listen((snap) {
+      _employeesCount = snap.docs.length + 1;
+      notifyListeners();
+    }, onError: (_) {});
+
+    _followersCountSub = FirebaseFirestore.instance
+        .collection('clinic_follows')
+        .where('clinicId', isEqualTo: clinicId)
+        .snapshots()
+        .listen((snap) {
+      _followersCount = snap.docs.length;
+      notifyListeners();
+    }, onError: (_) {});
+  }
+
   Future<String> createClinicPost({
     required String createdBy,
     required String userName,
@@ -366,6 +450,7 @@ class DentistClinicProvider with ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
+    _currentUserId = ownerId;
     notifyListeners();
 
     try {
@@ -385,6 +470,7 @@ class DentistClinicProvider with ChangeNotifier {
       );
       debugPrint('[CLINIC_PROVIDER] createClinic — OK, clinicId: ${_clinic!.id}');
       _status = ClinicStatus.owner;
+      _canManageAgenda = true;
       _isLoading = false;
       _subscribeToAppointments();
       _subscribeToTurnos();
@@ -392,6 +478,7 @@ class DentistClinicProvider with ChangeNotifier {
       _subscribeToClinicFeed();
       _subscribeToTreatmentConfessions();
       _subscribeToClinicalStories();
+      _subscribeToStats();
       notifyListeners();
       return true;
     } catch (e) {
@@ -408,6 +495,7 @@ class DentistClinicProvider with ChangeNotifier {
   Future<bool> joinByCode({required String apiKey, required String userId}) async {
     _isLoading = true;
     _error = null;
+    _currentUserId = userId;
     notifyListeners();
 
     try {
@@ -428,6 +516,8 @@ class DentistClinicProvider with ChangeNotifier {
         _subscribeToClinicFeed();
         _subscribeToTreatmentConfessions();
         _subscribeToClinicalStories();
+        await _resolveAgendaPermission(userId);
+        _subscribeToStats();
       } else {
         _error = 'Error al unirse a la clínica.';
       }
@@ -449,12 +539,18 @@ class DentistClinicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final success = await _service.leaveClinic(_clinic!.id, _clinic!.ownerId);
+      final userId = _currentUserId ?? _clinic!.ownerId;
+      final success = await _service.leaveClinic(_clinic!.id, userId);
       if (success) {
         _appointmentsSub?.cancel();
         _turnosSub?.cancel();
+        _promotionsSub?.cancel();
+        _feedSub?.cancel();
         _clinic = null;
         _appointments.clear();
+        _promotions.clear();
+        _promotionsLoaded = false;
+        _clinicFeed.clear();
         _status = ClinicStatus.noClinic;
       }
       _isLoading = false;
@@ -578,11 +674,23 @@ class DentistClinicProvider with ChangeNotifier {
   }
 
   Future<String> createPatient({
-    required String uid,
+    String? uid,
     required String fullName,
     String? photo,
     String? phone,
     String? email,
+    String? gender,
+    DateTime? birthDate,
+    String? address,
+    String? documentId,
+    String? maritalStatus,
+    String? occupation,
+    String? education,
+    String? smoker,
+    String? alcohol,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? referredBy,
     String? bloodType,
     List<String>? allergies,
     List<String>? medications,
@@ -601,6 +709,18 @@ class DentistClinicProvider with ChangeNotifier {
       photo: photo,
       phone: phone,
       email: email,
+      gender: gender,
+      birthDate: birthDate,
+      address: address,
+      documentId: documentId,
+      maritalStatus: maritalStatus,
+      occupation: occupation,
+      education: education,
+      smoker: smoker,
+      alcohol: alcohol,
+      emergencyContactName: emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone,
+      referredBy: referredBy,
       bloodType: bloodType,
       allergies: allergies,
       medications: medications,
@@ -660,6 +780,13 @@ class DentistClinicProvider with ChangeNotifier {
 
   Future<void> deleteClinicalRecord(String recordId) {
     return _patientService.deleteClinicalRecord(recordId);
+  }
+
+  Future<void> updateClinicalRecord(
+    String recordId,
+    Map<String, dynamic> updates,
+  ) {
+    return _patientService.updateClinicalRecord(recordId, updates);
   }
 
   // ── CRUD Turnos ───────────────────────────────────────
@@ -800,6 +927,9 @@ class DentistClinicProvider with ChangeNotifier {
     _feedSub?.cancel();
     _confessionSub?.cancel();
     _clinicalStorySub?.cancel();
+    _patientsCountSub?.cancel();
+    _employeesCountSub?.cancel();
+    _followersCountSub?.cancel();
     super.dispose();
   }
 }

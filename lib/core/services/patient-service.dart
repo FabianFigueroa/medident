@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:medident/core/models/patient-model.dart';
@@ -13,11 +14,14 @@ class PatientService {
       _firestore.collection('clinical_records');
 
   Stream<List<PatientModel>> streamPatientsByClinic(String clinicId) {
+    // Se filtra por clínica (un solo campo, sin índice compuesto) y el rol
+    // se descarta en memoria para no depender de índices de Firestore.
     return _users
-        .where('role', isEqualTo: 'patient')
         .where('clinicId', isEqualTo: clinicId)
         .snapshots()
-        .map((snap) => snap.docs.map((d) {
+        .map((snap) => snap.docs
+            .where((d) => d.data()['role'] == 'patient')
+            .map((d) {
               final data = d.data();
               return PatientModel(
                 id: d.id,
@@ -25,6 +29,7 @@ class PatientService {
                 photo: data['imageUrl'],
                 phone: data['phoneNumber'],
                 email: data['email'],
+                patientCode: data['patientCode'] ?? data['uniqueCode'],
                 lastVisit: data['lastVisit'] != null
                     ? (data['lastVisit'] as Timestamp).toDate()
                     : null,
@@ -52,10 +57,10 @@ class PatientService {
     try {
       final q = query.toLowerCase();
       final snap = await _users
-          .where('role', isEqualTo: 'patient')
           .where('clinicId', isEqualTo: clinicId)
           .get();
       return snap.docs
+          .where((d) => d.data()['role'] == 'patient')
           .map((d) {
             final data = d.data();
             return PatientModel(
@@ -64,9 +69,14 @@ class PatientService {
               photo: data['imageUrl'],
               phone: data['phoneNumber'],
               email: data['email'],
+              patientCode: data['patientCode'] ?? data['uniqueCode'],
             );
           })
-          .where((p) => p.fullName.toLowerCase().contains(q))
+          .where((p) =>
+              p.fullName.toLowerCase().contains(q) ||
+              p.id.toLowerCase().contains(q) ||
+              (p.patientCode ?? '').toLowerCase().contains(q) ||
+              (p.phone ?? '').contains(q))
           .toList();
     } catch (e) {
       debugPrint('searchPatients: $e');
@@ -74,13 +84,63 @@ class PatientService {
     }
   }
 
+  /// Busca un paciente por su código QR o por su UID dentro de la clínica.
+  Future<PatientModel?> getPatientByCode(String code, {String? clinicId}) async {
+    final value = code.trim();
+    if (value.isEmpty) return null;
+    try {
+      QuerySnapshot<Map<String, dynamic>>? snap =
+          await _users.where('patientCode', isEqualTo: value).limit(1).get();
+      if (snap.docs.isEmpty) {
+        snap = await _users.where('uniqueCode', isEqualTo: value).limit(1).get();
+      }
+      DocumentSnapshot<Map<String, dynamic>>? doc =
+          snap.docs.isEmpty ? null : snap.docs.first;
+      if (doc == null) {
+        final byId = await _users.doc(value).get();
+        if (byId.exists) doc = byId;
+      }
+      if (doc == null) return null;
+      final data = doc.data();
+      if (data == null || data['role'] != 'patient') return null;
+      if (clinicId != null &&
+          clinicId.isNotEmpty &&
+          data['clinicId'] != clinicId) {
+        return null;
+      }
+      return PatientModel(
+        id: doc.id,
+        fullName: data['fullName'] ?? '',
+        photo: data['imageUrl'],
+        phone: data['phoneNumber'],
+        email: data['email'],
+        patientCode: data['patientCode'] ?? data['uniqueCode'],
+      );
+    } catch (e) {
+      debugPrint('getPatientByCode: $e');
+      return null;
+    }
+  }
+
   Future<String> createPatient({
-    required String uid,
+    String? uid,
     required String fullName,
     required String clinicId,
     String? photo,
     String? phone,
     String? email,
+    String? gender,
+    DateTime? birthDate,
+    String? address,
+    String? documentId,
+    String? maritalStatus,
+    String? occupation,
+    String? education,
+    String? smoker,
+    String? alcohol,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? referredBy,
     String? bloodType,
     List<String>? allergies,
     List<String>? medications,
@@ -89,17 +149,36 @@ class PatientService {
     String? insuranceProvider,
     String? insuranceId,
     String? notes,
+    String? patientCode,
   }) async {
     final now = FieldValue.serverTimestamp();
+    final id = (uid != null && uid.isNotEmpty) ? uid : _users.doc().id;
+    final code = (patientCode != null && patientCode.trim().isNotEmpty)
+        ? patientCode.trim().toUpperCase()
+        : generatePatientCode();
 
-    await _users.doc(uid).set({
-      'uid': uid,
+    await _users.doc(id).set({
+      'uid': id,
       'fullName': fullName,
       'email': email ?? '',
       'phoneNumber': phone,
       'imageUrl': photo,
       'role': 'patient',
       'clinicId': clinicId,
+      'patientCode': code,
+      'uniqueCode': code,
+      'gender': gender,
+      'birthDate': birthDate != null ? Timestamp.fromDate(birthDate) : null,
+      'address': address,
+      'documentId': documentId,
+      'maritalStatus': maritalStatus,
+      'occupation': occupation,
+      'education': education,
+      'smoker': smoker,
+      'alcohol': alcohol,
+      'emergencyContactName': emergencyContactName,
+      'emergencyContactPhone': emergencyContactPhone,
+      'referredBy': referredBy,
       'isActive': true,
       'followersCount': 0,
       'followingCount': 0,
@@ -108,7 +187,7 @@ class PatientService {
       'updatedAt': now,
     });
 
-    await _profiles.doc(uid).set({
+    await _profiles.doc(id).set({
       'bloodType': bloodType,
       'allergies': allergies ?? [],
       'medications': medications ?? [],
@@ -122,7 +201,16 @@ class PatientService {
       'updatedAt': now,
     });
 
-    return uid;
+    return id;
+  }
+
+  /// Código corto e imprimible para el QR del paciente.
+  static String generatePatientCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = Random();
+    final suffix = List.generate(6, (_) => chars[random.nextInt(chars.length)])
+        .join();
+    return 'MED-$suffix';
   }
 
   Future<void> updatePatientProfile(String uid, Map<String, dynamic> updates) async {
@@ -143,10 +231,10 @@ class PatientService {
     String patientId,
     String clinicId,
   ) {
+    // Un solo filtro para no requerir índice compuesto. El filtro por clínica
+    // y el orden por fecha se aplican en la pantalla.
     return _records
         .where('patientId', isEqualTo: patientId)
-        .where('clinicId', isEqualTo: clinicId)
-        .orderBy('date', descending: true)
         .snapshots();
   }
 
@@ -277,6 +365,7 @@ class PatientService {
           : [],
       insuranceProvider: profileData?['insuranceProvider'],
       insuranceId: profileData?['insuranceId'],
+      patientCode: userData['patientCode'] ?? userData['uniqueCode'],
       notes: profileData?['notes'],
       clinicIds: profileData != null && profileData['clinicIds'] != null
           ? List<String>.from(profileData['clinicIds'])

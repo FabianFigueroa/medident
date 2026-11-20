@@ -62,4 +62,22 @@ class EmployeesService {
       rethrow;
     }
   }
+
+  Future<void> setAgendaPermission({
+    required String clinicId,
+    required String uid,
+    required bool canManageAgenda,
+  }) async {
+    try {
+      await _firestore
+          .collection('clinics')
+          .doc(clinicId)
+          .collection('employees')
+          .doc(uid)
+          .set({'canManageAgenda': canManageAgenda}, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('EmployeesService.setAgendaPermission error: $e');
+      rethrow;
+    }
+  }
 }

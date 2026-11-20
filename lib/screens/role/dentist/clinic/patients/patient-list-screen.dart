@@ -7,7 +7,11 @@ import 'package:hugeicons/hugeicons.dart';
 import 'patient-detail-screen.dart';
 
 class PatientListScreen extends StatefulWidget {
-  const PatientListScreen({super.key});
+  /// Cuando se usa como pestaña dentro de un [NestedScrollView] (dashboard de
+  /// la clínica) se inyecta el overlap para no quedar bajo el AppBar.
+  final bool embedInNestedScroll;
+
+  const PatientListScreen({super.key, this.embedInNestedScroll = false});
 
   @override
   State<PatientListScreen> createState() => _PatientListScreenState();
@@ -25,7 +29,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<DentistClinicProvider>(
+    final content = Consumer<DentistClinicProvider>(
       builder: (context, cp, _) {
         return StreamBuilder<List<PatientModel>>(
           stream: cp.streamPatients(_searchQuery),
@@ -36,6 +40,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
             final patients = snapshot.data ?? [];
             return CustomScrollView(
               slivers: [
+                if (widget.embedInNestedScroll)
+                  SliverOverlapInjector(
+                    handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                        context),
+                  ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -85,6 +94,22 @@ class _PatientListScreenState extends State<PatientListScreen> {
           },
         );
       },
+    );
+
+    if (widget.embedInNestedScroll) return content;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          'Pacientes',
+          style: TextStyle(fontFamily: 'Ubuntu-Bold', fontSize: 17),
+        ),
+      ),
+      body: content,
     );
   }
 

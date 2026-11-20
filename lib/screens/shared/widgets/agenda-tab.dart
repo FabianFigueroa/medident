@@ -12,7 +12,8 @@ import 'package:medident/screens/widgets/shared/create_appointment_sheet.dart';
 
 class AgendaTab_Screen extends StatelessWidget {
   final String? clinicId;
-  const AgendaTab_Screen({super.key, this.clinicId});
+  final bool canManage;
+  const AgendaTab_Screen({super.key, this.clinicId, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +22,7 @@ class AgendaTab_Screen extends StatelessWidget {
         appointments: aptProv.appointments,
         agendaProvider: agendaProv,
         clinicId: clinicId,
+        canManage: canManage,
       ),
     );
   }
@@ -30,8 +32,14 @@ class _AgendaBody extends StatelessWidget {
   final List<AppointmentModel> appointments;
   final AgendaProvider agendaProvider;
   final String? clinicId;
+  final bool canManage;
 
-  const _AgendaBody({required this.appointments, required this.agendaProvider, this.clinicId});
+  const _AgendaBody({
+    required this.appointments,
+    required this.agendaProvider,
+    this.clinicId,
+    this.canManage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +64,7 @@ class _AgendaBody extends StatelessWidget {
         SliverToBoxAdapter(child: _AppointmentsList(
           appointments: appointments,
           agendaProvider: agendaProvider,
+          canManage: canManage,
         )),
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
@@ -80,6 +89,7 @@ class _AgendaBody extends StatelessWidget {
         currentStatus: currentStatus,
         agendaProv: agendaProv,
         clinicId: clinicId,
+        canManage: canManage,
       ),
     );
   }
@@ -143,8 +153,13 @@ class _StatCard extends StatelessWidget {
 class _AppointmentsList extends StatelessWidget {
   final List<AppointmentModel> appointments;
   final AgendaProvider agendaProvider;
+  final bool canManage;
 
-  const _AppointmentsList({required this.appointments, required this.agendaProvider});
+  const _AppointmentsList({
+    required this.appointments,
+    required this.agendaProvider,
+    this.canManage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +243,7 @@ class _AppointmentsList extends StatelessWidget {
       ));
 
       for (final a in dayAppts) {
-        widgets.add(_AppointmentCard(appointment: a));
+        widgets.add(_AppointmentCard(appointment: a, canManage: canManage));
       }
     }
 
@@ -313,7 +328,8 @@ class _DayHeader extends StatelessWidget {
 
 class _AppointmentCard extends StatelessWidget {
   final AppointmentModel appointment;
-  const _AppointmentCard({required this.appointment});
+  final bool canManage;
+  const _AppointmentCard({required this.appointment, this.canManage = true});
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +338,8 @@ class _AppointmentCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: GestureDetector(
-        onTap: () => _showAppointmentDialog(context, appointment),
+        onTap: () =>
+            _showAppointmentDialog(context, appointment, canManage: canManage),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -551,11 +568,13 @@ class _DaySheet extends StatelessWidget {
   final DayStatus currentStatus;
   final AgendaProvider agendaProv;
   final String? clinicId;
+  final bool canManage;
 
   const _DaySheet({
     required this.day, required this.appointments,
     required this.currentStatus, required this.agendaProv,
     this.clinicId,
+    this.canManage = true,
   });
 
   static const _startHour = 7;
@@ -629,7 +648,12 @@ class _DaySheet extends StatelessWidget {
                 Text(dateStr, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isPast ? Colors.grey[500] : Colors.black)),
               ],
             )),
-            _StatusChip(status: currentStatus, onChanged: (s) => agendaProv.setDayStatus(day, s)),
+            _StatusChip(
+              status: currentStatus,
+              onChanged: canManage
+                  ? (s) => agendaProv.setDayStatus(day, s)
+                  : null,
+            ),
           ]),
         ),
         const Divider(height: 30),
@@ -657,10 +681,11 @@ class _DaySheet extends StatelessWidget {
                     isOccupied: isOccupied,
                     appointment: appt,
                     isPast: isPast,
-                    onConfirm: appt != null ? () => agendaProv.updateAppointmentStatus(appt.id, 'confirmed') : null,
-                    onCancel: appt != null ? () => agendaProv.updateAppointmentStatus(appt.id, 'cancelled') : null,
-                    onDelete: appt != null ? () => agendaProv.deleteAppointment(appt.id) : null,
-                    onCreateAppointment: isPast ? null : () => _createAppointment(context, slot),
+                    canManage: canManage,
+                    onConfirm: appt != null && canManage ? () => agendaProv.updateAppointmentStatus(appt.id, 'confirmed') : null,
+                    onCancel: appt != null && canManage ? () => agendaProv.updateAppointmentStatus(appt.id, 'cancelled') : null,
+                    onDelete: appt != null && canManage ? () => agendaProv.deleteAppointment(appt.id) : null,
+                    onCreateAppointment: (!isPast && canManage) ? () => _createAppointment(context, slot) : null,
                   ),
                 ],
               );
@@ -677,12 +702,13 @@ class _TimeSlotTile extends StatelessWidget {
   final bool isOccupied;
   final AppointmentModel? appointment;
   final bool isPast;
+  final bool canManage;
   final VoidCallback? onConfirm, onCancel, onDelete, onCreateAppointment;
 
   const _TimeSlotTile({
     required this.time, required this.isOccupied, this.appointment,
-    this.isPast = false, this.onConfirm, this.onCancel, this.onDelete,
-    this.onCreateAppointment,
+    this.isPast = false, this.canManage = true, this.onConfirm, this.onCancel,
+    this.onDelete, this.onCreateAppointment,
   });
 
   @override
@@ -693,8 +719,9 @@ class _TimeSlotTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: GestureDetector(
         onTap: appointment != null
-            ? () => _showAppointmentDialog(context, appointment!)
-            : (!isPast ? onCreateAppointment : null),
+            ? () => _showAppointmentDialog(context, appointment!,
+                canManage: canManage)
+            : (!isPast && canManage ? onCreateAppointment : null),
         child: Container(
           decoration: BoxDecoration(
             color: isOccupied ? Colors.white : (isPast ? Colors.grey[50] : Colors.green.withOpacity(0.04)),
@@ -732,7 +759,7 @@ class _TimeSlotTile extends StatelessWidget {
                         ],
                       ),
               ),
-              if (isOccupied && appointment != null && !isPast)
+              if (canManage && isOccupied && appointment != null && !isPast)
                 PopupMenuButton<String>(
                   onSelected: (v) {
                     if (v == 'confirm') onConfirm?.call();
@@ -756,7 +783,11 @@ class _TimeSlotTile extends StatelessWidget {
   }
 }
 
-void _showAppointmentDialog(BuildContext context, AppointmentModel appointment) {
+void _showAppointmentDialog(
+  BuildContext context,
+  AppointmentModel appointment, {
+  bool canManage = true,
+}) {
   final agendaProv = Provider.of<AgendaProvider>(context, listen: false);
   final aptProv = Provider.of<AppointmentProvider>(context, listen: false);
   showModalBottomSheet(
@@ -767,6 +798,7 @@ void _showAppointmentDialog(BuildContext context, AppointmentModel appointment) 
       appointment: appointment,
       agendaProv: agendaProv,
       aptProv: aptProv,
+      canManage: canManage,
     ),
   );
 }
@@ -776,11 +808,13 @@ class _AppointmentDetailSheet extends StatefulWidget {
   final AppointmentModel appointment;
   final AgendaProvider agendaProv;
   final AppointmentProvider aptProv;
+  final bool canManage;
 
   const _AppointmentDetailSheet({
     required this.appointment,
     required this.agendaProv,
     required this.aptProv,
+    this.canManage = true,
   });
 
   @override
@@ -896,13 +930,14 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
           ),
           const SizedBox(height: 28),
           // ── Actions Grid ──
-          FadeTransition(
-            opacity: _actionsFade,
-            child: SlideTransition(
-              position: _actionsSlide,
-              child: _buildActionsGrid(),
+          if (widget.canManage)
+            FadeTransition(
+              opacity: _actionsFade,
+              child: SlideTransition(
+                position: _actionsSlide,
+                child: _buildActionsGrid(),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1356,12 +1391,19 @@ class _StatusBadge extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   final DayStatus status;
-  final ValueChanged<DayStatus> onChanged;
+  final ValueChanged<DayStatus>? onChanged;
 
-  const _StatusChip({required this.status, required this.onChanged});
+  const _StatusChip({required this.status, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
+    if (onChanged == null) {
+      return Chip(
+        avatar: Icon(status.icon, size: 18, color: status.color),
+        label: Text(status.label, style: TextStyle(fontSize: 13, color: status.color)),
+        backgroundColor: status.color.withOpacity(0.1),
+      );
+    }
     return PopupMenuButton<DayStatus>(
       onSelected: onChanged,
       itemBuilder: (_) => DayStatus.values.map((s) => PopupMenuItem(

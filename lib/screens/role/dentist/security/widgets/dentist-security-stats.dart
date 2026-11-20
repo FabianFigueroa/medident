@@ -1,13 +1,13 @@
 ﻿import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:medident/main_export.dart';
+import 'package:medident/core/utils/app-colors.dart';
+import 'package:medident/core/utils/app-constant.dart';
+import 'package:medident/core/widgets/app_card.dart';
+import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:provider/provider.dart';
 
 class DentistSecurityStats extends StatelessWidget {
   const DentistSecurityStats({super.key});
-
-  static const _darkText = Color(0xFF1D1D1F);
-  static const _mediumText = Color(0xFF86868B);
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class DentistSecurityStats extends StatelessWidget {
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingM, AppConstants.paddingS, AppConstants.paddingM, AppConstants.paddingS),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -34,17 +34,17 @@ class DentistSecurityStats extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                _statCard(Icons.person_outline, 'Accesos hoy', '12', const Color(0xFF007AFF)),
+                _statCard(Icons.person_outline, 'Accesos hoy', '12', AppColors.primary),
                 const SizedBox(width: 12),
-                _statCard(Icons.devices_outlined, 'Dispositivos on', '$active', const Color(0xFF34C759)),
+                _statCard(Icons.devices_outlined, 'Dispositivos on', '$active', AppColors.success),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                _statCard(Icons.notifications_outlined, 'Alertas', '${provider.alerts.length}', const Color(0xFFFF9500)),
+                _statCard(Icons.notifications_outlined, 'Alertas', '${provider.alerts.length}', AppColors.warning),
                 const SizedBox(width: 12),
-                _statCard(Icons.timer_outlined, 'Uptime', '${uptime.toStringAsFixed(1)}%', const Color(0xFF5856D6)),
+                _statCard(Icons.timer_outlined, 'Uptime', '${uptime.toStringAsFixed(1)}%', AppColors.purpleColor),
               ],
             ),
           ],
@@ -59,7 +59,7 @@ class DentistSecurityStats extends StatelessWidget {
       style: const TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        color: _darkText,
+        color: AppColors.textPrimary,
         letterSpacing: -0.3,
       ),
     );
@@ -67,12 +67,9 @@ class DentistSecurityStats extends StatelessWidget {
 
   Widget _statCard(IconData icon, String label, String value, Color color) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F7),
-          borderRadius: BorderRadius.circular(14),
-        ),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppConstants.paddingM),
+        margin: EdgeInsets.zero,
         child: Row(
           children: [
             Container(
@@ -80,7 +77,7 @@ class DentistSecurityStats extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppConstants.radiusXS),
               ),
               child: Icon(icon, color: color, size: 20),
             ),
@@ -94,7 +91,7 @@ class DentistSecurityStats extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: _darkText,
+                      color: AppColors.textPrimary,
                       letterSpacing: -0.3,
                     ),
                   ),
@@ -102,7 +99,7 @@ class DentistSecurityStats extends StatelessWidget {
                     label,
                     style: const TextStyle(
                       fontSize: 12,
-                      color: _mediumText,
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

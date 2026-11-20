@@ -1,3 +1,8 @@
+# Flutter - Deferred components / Play Core (no usamos deferred components)
+-keep class io.flutter.embedding.engine.deferredcomponents.** { *; }
+-dontwarn com.google.android.play.core.**
+-dontwarn io.flutter.embedding.engine.deferredcomponents.**
+
 # Flutter
 -keep class io.flutter.app.** { *; }
 -keep class io.flutter.plugin.** { *; }

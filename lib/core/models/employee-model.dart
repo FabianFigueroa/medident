@@ -59,6 +59,7 @@ class EmployeeModel {
   final String position;
   final bool isActive;
   final bool hasSecurityAccess;
+  final bool canManageAgenda;
   final String? rfidUid;
   final String? contractType;
   final DateTime? hiredAt;
@@ -71,6 +72,7 @@ class EmployeeModel {
     this.position = 'medico_general',
     this.isActive = true,
     this.hasSecurityAccess = false,
+    this.canManageAgenda = false,
     this.rfidUid,
     this.contractType,
     this.hiredAt,
@@ -86,6 +88,7 @@ class EmployeeModel {
     position: map['position'] as String? ?? 'medico_general',
     isActive: map['isActive'] as bool? ?? true,
     hasSecurityAccess: map['hasSecurityAccess'] as bool? ?? false,
+    canManageAgenda: map['canManageAgenda'] as bool? ?? false,
     rfidUid: map['rfidUid'] as String?,
     contractType: map['contractType'] as String?,
     hiredAt: (map['hiredAt'] as Timestamp?)?.toDate(),
@@ -99,6 +102,7 @@ class EmployeeModel {
     'position': position,
     'isActive': isActive,
     'hasSecurityAccess': hasSecurityAccess,
+    'canManageAgenda': canManageAgenda,
     if (rfidUid != null) 'rfidUid': rfidUid,
     if (contractType != null) 'contractType': contractType,
     if (hiredAt != null) 'hiredAt': Timestamp.fromDate(hiredAt!),
@@ -112,6 +116,7 @@ class EmployeeModel {
     String? position,
     bool? isActive,
     bool? hasSecurityAccess,
+    bool? canManageAgenda,
     String? rfidUid,
     String? contractType,
     DateTime? hiredAt,
@@ -123,6 +128,7 @@ class EmployeeModel {
     position: position ?? this.position,
     isActive: isActive ?? this.isActive,
     hasSecurityAccess: hasSecurityAccess ?? this.hasSecurityAccess,
+    canManageAgenda: canManageAgenda ?? this.canManageAgenda,
     rfidUid: rfidUid ?? this.rfidUid,
     contractType: contractType ?? this.contractType,
     hiredAt: hiredAt ?? this.hiredAt,

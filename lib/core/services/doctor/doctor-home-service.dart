@@ -69,6 +69,7 @@ class DoctorHomeService {
           .collection('promotions')
           .where('scope', isEqualTo: 'global')
           .where('isActive', isEqualTo: true)
+          .limit(10)
           .get();
       return snap.docs
           .map((d) => ProductModel.fromJson(d.data(), d.id))

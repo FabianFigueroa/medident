@@ -18,6 +18,7 @@ class PatientModel {
   final List<String> dentalHistory;
   final String? insuranceProvider;
   final String? insuranceId;
+  final String? patientCode;
   final String? notes;
   final List<String> clinicIds;
   final bool isActive;
@@ -41,6 +42,7 @@ class PatientModel {
     this.dentalHistory = const [],
     this.insuranceProvider,
     this.insuranceId,
+    this.patientCode,
     this.notes,
     this.clinicIds = const [],
     this.isActive = true,
@@ -66,6 +68,7 @@ class PatientModel {
       dentalHistory: List<String>.from(map['dentalHistory'] ?? []),
       insuranceProvider: map['insuranceProvider'],
       insuranceId: map['insuranceId'],
+      patientCode: map['patientCode'] ?? map['uniqueCode'],
       notes: map['notes'],
       clinicIds: List<String>.from(map['clinicIds'] ?? []),
       isActive: map['isActive'] ?? true,
@@ -90,6 +93,7 @@ class PatientModel {
       'dentalHistory': dentalHistory,
       'insuranceProvider': insuranceProvider,
       'insuranceId': insuranceId,
+      'patientCode': patientCode,
       'notes': notes,
       'isActive': isActive,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),

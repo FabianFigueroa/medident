@@ -2,15 +2,32 @@
   /// URL de la Cloud Function de Valeria con Gemini (deprecated)
   static const String? classifyUrl = null;
 
-  /// API Key de xAI Grok (https://console.x.ai)
-  /// ⚠️ No subas este archivo a git con la key expuesta
-  static const String? grokApiKey = null;
+  /// ═══════════════════════════════════════════════
+  /// GOOGLE GEMINI (tier gratuito de AI Studio)
+  /// ═══════════════════════════════════════════════
+  ///
+  /// Consigue tu key gratis en https://aistudio.google.com/apikey
+  /// (cuenta de Google, sin tarjeta de crédito).
+  ///
+  /// NO pegues la key en este archivo. Pásala al compilar:
+  ///
+  ///   flutter run --dart-define=VALERIA_AI_KEY=AIzaTuKeyAqui
+  ///   flutter build web --dart-define=VALERIA_AI_KEY=AIzaTuKeyAqui
+  ///   flutter build apk --dart-define=VALERIA_AI_KEY=AIzaTuKeyAqui
+  ///
+  static const String _envApiKey = String.fromEnvironment('VALERIA_AI_KEY');
 
-  /// Modelo de Grok a usar
-  static const String grokModel = 'grok-2-latest';
+  /// Key activa de Gemini (null si no se definió al compilar)
+  static String? get geminiApiKey => _envApiKey.isEmpty ? null : _envApiKey;
 
-  /// Endpoint de Grok API
-  static const String grokEndpoint = 'https://api.x.ai/v1/chat/completions';
+  /// Modelo de Gemini a usar.
+  /// Los modelos "flash" están incluidos en el tier gratuito.
+  /// Modelos vigentes: https://ai.google.dev/gemini-api/docs/models
+  static const String geminiModel = 'gemini-3.6-flash';
+
+  /// Endpoint de Gemini API (compatible con formato OpenAI chat completions)
+  static const String geminiEndpoint =
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
   /// Timeout en milisegundos para la petición HTTP
   static const int timeoutMs = 15000;
@@ -18,7 +35,7 @@
   /// Si debe usar el motor local como fallback cuando no hay conexión
   static const bool useLocalFallback = true;
 
-  /// Contexto del sistema para Grok
+  /// Contexto del sistema para Gemini
   static const String systemPrompt = '''
 Eres Valeria, una asistente amigable y experta en odontología para la app Medident.
 Hablas en español con acento y expresiones colombianas ("paisa" de Medellín/Antioquia).

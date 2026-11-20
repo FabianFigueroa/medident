@@ -1,12 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FirebaseSeeder {
   static bool _executed = false;
+  static const String _doneKey = 'medident_demo_seed_v2';
 
   static Future<void> seedOnce() async {
     if (_executed) return;
     _executed = true;
 
+    // Solo una vez por dispositivo: antes se reescribia TODO en cada arranque,
+    // re-disparando los streams del feed y gastando red/cuota.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_doneKey) == true) return;
+      await _seed();
+      await prefs.setBool(_doneKey, true);
+    } catch (_) {
+      _executed = false;
+    }
+  }
+
+  static Future<void> _seed() async {
     final fs = FirebaseFirestore.instance;
     final batch = fs.batch();
 
@@ -66,10 +81,16 @@ class FirebaseSeeder {
       'description': 'Odontología de punta con los mejores profesionales',
       'address': 'Carrera 45 # 23-12, Bogotá',
       'phone': '+57 1 234 5678',
+      'email': 'contacto@clinicamedident.com',
+      'nit': '900123456-7',
       'ownerId': 'doctor_demo_1',
+      'employeeIds': ['doctor_demo_1', 'doctor_demo_2'],
+      'apiKey': 'MEDIDENT-CLINIC-DEMO-2026',
+      'logoUrl': '',
+      'coverImage': '',
+      'primaryColor': '#0EA5A4',
       'isActive': true,
       'createdAt': Timestamp.now(),
-      'coverImage': '',
     });
 
     // --- Products / Promotions ---
@@ -95,7 +116,14 @@ class FirebaseSeeder {
 
     for (int i = 0; i < promotions.length; i++) {
       final ref = fs.collection('promotions').doc('promo_demo_${i+1}');
-      batch.set(ref, {...promotions[i], 'createdAt': Timestamp.now()});
+      batch.set(ref, {
+        ...promotions[i],
+        'clinicId': 'clinic_demo_1',
+        'source': 'clinic',
+        'createdBy': 'clinic_demo_1',
+        'createdByUserId': 'doctor_demo_1',
+        'createdAt': Timestamp.now(),
+      });
     }
 
     // --- Posts ---
@@ -132,9 +160,11 @@ class FirebaseSeeder {
       },
       {
         'userId': 'doctor_demo_1',
+        'clinicId': 'clinic_demo_1',
         'sourceType': 'clinic',
         'sourceId': 'clinic_demo_1',
         'sourceName': 'Clínica Medident',
+        'createdByUserId': 'doctor_demo_1',
         'sourcePhoto': '',
         'description': '🏥 Nueva tecnología 3D para diagnóstico. Ahora con escáner intraoral digital. Resultados más rápidos y precisos.',
         'imageUrls': [],

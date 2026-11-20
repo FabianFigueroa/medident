@@ -6,6 +6,8 @@ import 'package:medident/screens/role/dentist/profile/widgets/dentist-services-w
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-info-widget.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/screens/role/dentist/profile/widgets/dentist-profile-header-widget.dart';
+import 'package:medident/screens/widgets/shared/profile-clinic-card.dart';
+import 'package:medident/screens/widgets/shared/profile-posts-grid.dart';
 import 'package:medident/main_export.dart';
 
 class DentistProfile_Mobile extends StatelessWidget {
@@ -90,7 +92,7 @@ class DentistProfile_Mobile extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => AccountScreenMobile(
-                    uid: currentUser?.uid ?? '',
+                    uid: userProfile.uid,
                   ),
                 ),
               );
@@ -117,11 +119,17 @@ class DentistProfile_Mobile extends StatelessWidget {
                 ),
               ),
               SliverToBoxAdapter(
+                child: ProfileClinicCard.fromUser(userProfile),
+              ),
+              SliverToBoxAdapter(
                 child: DentistInfoWidget(
                   userModel: userProfile,
                   isOwnProfile: isOwnProfile,
                   onEditPressed: () => _handleEditProfile(context),
                 ),
+              ),
+              SliverToBoxAdapter(
+                child: ProfilePostsGrid(userId: userProfile.uid),
               ),
               SliverToBoxAdapter(
                 child: DentistServicesWidget(

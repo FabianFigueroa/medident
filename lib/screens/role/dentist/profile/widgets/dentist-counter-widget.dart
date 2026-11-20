@@ -44,24 +44,24 @@ class _Dentist_Counter_WidgetState extends State<Dentist_Counter_Widget> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            // Contador de Ventas
+            // Contador de Servicios
             Expanded(
               child: CounterWidget(
-                label: 'Ventas',
+                label: 'Servicios',
                 count: widget.currentUser.servicesCount,
-              ),
-            ),
-            // Contador de Pacientes  
-            Expanded(
-              child: CounterWidget(
-                label: 'Pacientes',
-                count: widget.currentUser.followersCount,
               ),
             ),
             // Contador de Seguidores
             Expanded(
               child: CounterWidget(
                 label: 'Seguidores',
+                count: widget.currentUser.followersCount,
+              ),
+            ),
+            // Contador de Siguiendo
+            Expanded(
+              child: CounterWidget(
+                label: 'Siguiendo',
                 count: widget.currentUser.followingCount,
               ),
             ),
@@ -88,20 +88,21 @@ class _Dentist_Counter_WidgetState extends State<Dentist_Counter_Widget> {
 
   Widget _buildActionButton(BuildContext context) {
     if (widget.isOwnProfile) {
-      // Si es el perfil propio, mostrar botón de "Editar perfil"
-      return ElevatedButton(
+      // Perfil del usuario: editar sus datos personales.
+      return ElevatedButton.icon(
         onPressed: widget.onEditProfilePressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color.fromARGB(255, 5, 172, 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
         ),
-        child: const Text(
+        icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+        label: const Text(
           'Editar perfil',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),

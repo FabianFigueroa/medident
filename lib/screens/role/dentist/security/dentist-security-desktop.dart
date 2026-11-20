@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:medident/core/utils/app-colors.dart';
 import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-dashboard.dart';
 import 'package:medident/screens/role/dentist/security/widgets/dentist-security-stats.dart';
@@ -25,14 +26,9 @@ class DentistSecurityDesktop extends StatelessWidget {
 
   Widget _buildDashboard(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surfaceVariant,
       appBar: AppBar(
         title: const Text('Seguridad'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1D1D1F),
-        elevation: 0,
-        surfaceTintColor: Colors.white,
       ),
       body: CustomScrollView(
         controller: scrollController,

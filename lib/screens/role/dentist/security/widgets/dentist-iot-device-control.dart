@@ -1,13 +1,13 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:medident/main_export.dart';
+import 'package:medident/core/utils/app-colors.dart';
+import 'package:medident/core/utils/app-constant.dart';
+import 'package:medident/core/widgets/app_card.dart';
+import 'package:medident/core/providers/dentist/dentist-security-provider.dart';
+import 'package:medident/core/models/roles/dentist/dentist-security-model.dart';
 import 'package:provider/provider.dart';
 
 class DentistIoTDeviceControl extends StatelessWidget {
   const DentistIoTDeviceControl({super.key});
-
-  static const _darkText = Color(0xFF1D1D1F);
-  static const _mediumText = Color(0xFF86868B);
-  static const _cardBg = Color(0xFFF5F5F7);
 
   @override
   Widget build(BuildContext context) {
@@ -16,17 +16,17 @@ class DentistIoTDeviceControl extends StatelessWidget {
     if (profile == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     final allDevices = <_DeviceItem>[
-      ...profile.lights.map((d) => _DeviceItem(d, Icons.light_outlined, const Color(0xFFFF9500), 'lights')),
-      ...profile.fans.map((d) => _DeviceItem(d, Icons.air_outlined, const Color(0xFF007AFF), 'fans')),
-      ...profile.airs.map((d) => _DeviceItem(d, Icons.ac_unit_outlined, const Color(0xFF34C759), 'airs')),
-      ...profile.tvs.map((d) => _DeviceItem(d, Icons.tv_outlined, const Color(0xFF5856D6), 'tvs')),
-      ...profile.doors.map((d) => _DeviceItem(d, Icons.door_front_door_outlined, const Color(0xFFFF3B30), 'doors')),
+      ...profile.lights.map((d) => _DeviceItem(d, Icons.light_outlined, AppColors.accent, 'lights')),
+      ...profile.fans.map((d) => _DeviceItem(d, Icons.air_outlined, AppColors.primary, 'fans')),
+      ...profile.airs.map((d) => _DeviceItem(d, Icons.ac_unit_outlined, AppColors.success, 'airs')),
+      ...profile.tvs.map((d) => _DeviceItem(d, Icons.tv_outlined, AppColors.purpleColor, 'tvs')),
+      ...profile.doors.map((d) => _DeviceItem(d, Icons.door_front_door_outlined, AppColors.error, 'doors')),
       ...profile.voices.map((d) => _DeviceItem(d, Icons.volume_up_outlined, const Color(0xFFAF52DE), 'voices')),
     ];
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingM, AppConstants.paddingS, AppConstants.paddingM, AppConstants.paddingS),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -35,19 +35,16 @@ class DentistIoTDeviceControl extends StatelessWidget {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: _darkText,
+                color: AppColors.textPrimary,
                 letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 14),
             ...allDevices.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _cardBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM, vertical: 12),
+                margin: EdgeInsets.zero,
                 child: Row(
                   children: [
                     Container(
@@ -55,7 +52,7 @@ class DentistIoTDeviceControl extends StatelessWidget {
                       height: 40,
                       decoration: BoxDecoration(
                         color: item.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppConstants.radiusXS),
                       ),
                       child: Icon(item.icon, color: item.color, size: 20),
                     ),
@@ -69,19 +66,19 @@ class DentistIoTDeviceControl extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: _darkText,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           Text(
                             item.device.room,
-                            style: TextStyle(fontSize: 12, color: _mediumText),
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
                     ),
                     Switch(
                       value: item.device.isOn,
-                      activeColor: const Color(0xFF34C759),
+                      activeColor: AppColors.success,
                       onChanged: (val) => provider.updateUserDeviceState(
                         item.type,
                         item.device.id,

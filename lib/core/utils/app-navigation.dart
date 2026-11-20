@@ -1,4 +1,4 @@
-﻿// ignore_for_file: unused_field
+// ignore_for_file: unused_field
 
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -20,20 +20,24 @@ import 'package:medident/screens/role/admin/deliveries/admin-delivery-screen.dar
 import 'package:medident/screens/role/admin/profile/admin-profile-screen.dart';
 import 'package:medident/screens/role/admin/security/widgets/admin-contracts-nav-screen.dart';
 import 'package:medident/screens/role/dentist/home/dentist-home-screen.dart';
-import 'package:medident/screens/role/dentist/delivery/dentist-delivery-screen.dart';
+import 'package:medident/screens/role/dentist/agenda/dentist-personal-agenda.dart';
 import 'package:medident/screens/role/dentist/clinic/dentist-clinic-screen.dart';
 import 'package:medident/screens/role/dentist/profile/dentist-profile-screen.dart';
-import 'package:medident/screens/role/dentist/security/dentist-security-screen.dart';
+import 'package:medident/screens/role/doctor/doctor-delivery-screen.dart';
+import 'package:medident/screens/role/doctor/agenda/doctor-personal-agenda.dart';
 import 'package:medident/screens/role/doctor/doctor-home-screen.dart';
 import 'package:medident/screens/role/doctor/doctor-shop-screen.dart';
 import 'package:medident/screens/role/doctor/doctor-security-screen.dart';
 import 'package:medident/screens/role/doctor/doctor-profile-screen.dart';
 import 'package:medident/screens/role/employee/employee-home-screen.dart';
+import 'package:medident/screens/role/employee/agenda/employee-personal-agenda.dart';
 import 'package:medident/screens/role/employee/employee-shop-screen.dart';
 import 'package:medident/screens/role/employee/employee-security-screen.dart';
 import 'package:medident/screens/role/employee/employee-delivery-screen.dart';
 import 'package:medident/screens/role/employee/employee-profile-screen.dart';
+import 'package:medident/screens/role/patient/patient-delivery-screen.dart';
 import 'package:medident/screens/role/patient/patient-home-screen.dart';
+import 'package:medident/screens/role/patient/agenda/patient-personal-agenda.dart';
 import 'package:medident/screens/role/patient/patient-shop-screen.dart';
 import 'package:medident/screens/role/patient/patient-security-screen.dart';
 import 'package:medident/screens/role/patient/patient-profile-screen.dart';
@@ -67,6 +71,18 @@ class _NavigationsScreenState extends State<NavigationsScreen>
   late TabController _tabController;
   late _RoleNavigationConfig _config;
 
+  /// Avatar flotante de Valeria IA. Desactivado por ahora para centrarnos en
+  /// la administración de la clínica. Cambiar a true para volver a mostrarlo.
+  static const bool _showValeriaAssistant = false;
+
+  /// NavegaciÃ³n lazy (patrÃ³n tenderos): solo se montan las pestaÃ±as que el
+  /// usuario ya visitÃ³. Antes el IndexedStack montaba TODAS las pantallas del
+  /// rol a la vez y cada una disparaba su `initializeSection(...)` en el
+  /// arranque (home + shop + security + delivery + profile compitiendo por la
+  /// red). Ahora el primer frame solo monta el Home.
+  int _selectedIndex = 0;
+  int _maxLoadedIndex = 0;
+
   final SearchController _searchController = SearchController();
 
   String get _roleName => AppLogger.roleName(widget.role);
@@ -76,13 +92,27 @@ class _NavigationsScreenState extends State<NavigationsScreen>
     super.initState();
     _config = _buildNavigationForRole(widget.role);
     _tabController = TabController(length: _config.items.length, vsync: this);
+    _tabController.addListener(_onTabIndexChanged);
+    _selectedIndex = 0;
+    _maxLoadedIndex = 0;
     if (_allEmployees.isNotEmpty) {
       _selectedEmployee = _allEmployees[0];
     }
   }
 
+  void _onTabIndexChanged() {
+    final index = _tabController.index;
+    if (index != _selectedIndex) {
+      setState(() {
+        _selectedIndex = index;
+        if (index > _maxLoadedIndex) _maxLoadedIndex = index;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _tabController.removeListener(_onTabIndexChanged);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -143,25 +173,25 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               screen: DentistHomeScreen(),
             ),
             _NavItem(
-              label: 'Clínica',
+              label: 'ClÃ­nica',
               icon: HugeIcons.strokeRoundedHospital01,
               activeIcon: HugeIcons.strokeRoundedHospital02,
               screen: DentistClinicScreen(),
             ),
             _NavItem(
-              label: 'Security',
-              icon: HugeIcons.strokeRoundedShield01,
-              activeIcon: HugeIcons.strokeRoundedShield02,
-              screen: DentistSecurityScreen(),
+              label: 'Agenda',
+              icon: HugeIcons.strokeRoundedCalendar01,
+              activeIcon: HugeIcons.strokeRoundedCalendar03,
+              screen: DentistAgendaScreen(),
             ),
             _NavItem(
-              label: 'Delivery',
-              icon: HugeIcons.strokeRoundedTruck,
-              activeIcon: HugeIcons.strokeRoundedTruckDelivery,
-              screen: DentistDeliveryScreen(),
+              label: 'Turnos',
+              icon: HugeIcons.strokeRoundedTime01,
+              activeIcon: HugeIcons.strokeRoundedTime02,
+              screen: DentistTurnosAgendaScreen(),
             ),
             _NavItem(
-              label: 'Profile',
+              label: 'Perfil',
               icon: HugeIcons.strokeRoundedUser,
               activeIcon: HugeIcons.strokeRoundedUserCircle,
               screen: DentistProfileScreen(),
@@ -179,6 +209,18 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               screen: DoctorHomeScreen(),
             ),
             _NavItem(
+              label: 'Agenda',
+              icon: HugeIcons.strokeRoundedCalendar01,
+              activeIcon: HugeIcons.strokeRoundedCalendar03,
+              screen: DoctorAgendaScreen(),
+            ),
+            _NavItem(
+              label: 'Turnos',
+              icon: HugeIcons.strokeRoundedTime01,
+              activeIcon: HugeIcons.strokeRoundedTime02,
+              screen: DoctorTurnosScreen(),
+            ),
+            _NavItem(
               label: 'Shop',
               icon: HugeIcons.strokeRoundedStore03,
               activeIcon: HugeIcons.strokeRoundedShopSign,
@@ -194,13 +236,7 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               label: 'Delivery',
               icon: HugeIcons.strokeRoundedTruck,
               activeIcon: HugeIcons.strokeRoundedTruckDelivery,
-              screen: _RolePlaceholderScreen(
-                role: 'doctor',
-                section: 'Delivery',
-                title: 'Doctor Delivery Screen',
-                description:
-                    'Pantalla temporal para entregas, solicitudes y seguimiento operativo.',
-              ),
+              screen: DoctorDeliveryScreen(),
             ),
             _NavItem(
               label: 'Profile',
@@ -219,6 +255,18 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               icon: HugeIcons.strokeRoundedHome01,
               activeIcon: HugeIcons.strokeRoundedHome09,
               screen: EmployeeHomeScreen(),
+            ),
+            _NavItem(
+              label: 'Agenda',
+              icon: HugeIcons.strokeRoundedCalendar01,
+              activeIcon: HugeIcons.strokeRoundedCalendar03,
+              screen: EmployeeAgendaScreen(),
+            ),
+            _NavItem(
+              label: 'Turnos',
+              icon: HugeIcons.strokeRoundedTime01,
+              activeIcon: HugeIcons.strokeRoundedTime02,
+              screen: EmployeeTurnosScreen(),
             ),
             _NavItem(
               label: 'Shop',
@@ -257,6 +305,12 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               screen: PatientHomeScreen(),
             ),
             _NavItem(
+              label: 'Agenda',
+              icon: HugeIcons.strokeRoundedCalendar01,
+              activeIcon: HugeIcons.strokeRoundedCalendar03,
+              screen: PatientAgendaScreen(),
+            ),
+            _NavItem(
               label: 'Shop',
               icon: HugeIcons.strokeRoundedStore03,
               activeIcon: HugeIcons.strokeRoundedShopSign,
@@ -272,13 +326,7 @@ class _NavigationsScreenState extends State<NavigationsScreen>
               label: 'Delivery',
               icon: HugeIcons.strokeRoundedTruck,
               activeIcon: HugeIcons.strokeRoundedTruckDelivery,
-              screen: _RolePlaceholderScreen(
-                role: 'patient',
-                section: 'Delivery',
-                title: 'Patient Delivery Screen',
-                description:
-                    'Pantalla temporal para seguimiento de entregas, ordenes y solicitudes.',
-              ),
+              screen: PatientDeliveryScreen(),
             ),
             _NavItem(
               label: 'Profile',
@@ -329,6 +377,8 @@ class _NavigationsScreenState extends State<NavigationsScreen>
 
   void _selectTab(int index, {required bool desktop}) {
     setState(() {
+      _selectedIndex = index;
+      if (index > _maxLoadedIndex) _maxLoadedIndex = index;
       _tabController.index = index;
     });
   }
@@ -350,17 +400,26 @@ class _NavigationsScreenState extends State<NavigationsScreen>
       role: _roleName,
       child: Scaffold(
         appBar: isDesktop ? _buildDesktopAppBar() : null,
-        body: Stack(
+          body: Stack(
           children: [
             IndexedStack(
-              index: _tabController.index,
-              children: _config.items.map((item) => item.screen).toList(),
+              index: _selectedIndex,
+              children: List.generate(_config.items.length, (i) {
+                final active = i == _selectedIndex;
+                // Nunca montar una pestaÃ±a no visitada: asÃ­ no se inicializan
+                // sus providers ni sus streams durante el arranque.
+                final child = i <= _maxLoadedIndex
+                    ? _config.items[i].screen
+                    : const SizedBox.shrink();
+                return TickerMode(enabled: active, child: child);
+              }),
             ),
-            const Positioned(
-              bottom: 80,
-              right: 20,
-              child: ValeriaAssistant(),
-            ),
+            if (_showValeriaAssistant)
+              const Positioned(
+                bottom: 80,
+                right: 20,
+                child: ValeriaAssistant(),
+              ),
           ],
         ),
         bottomNavigationBar: isDesktop ? null : _buildMobileBottomBar(),
@@ -650,89 +709,4 @@ class _NavItem {
     required this.activeIcon,
     required this.screen,
   });
-}
-//////////////////////////////////////////////////////////
-class _RolePlaceholderScreen extends StatelessWidget {
-  final String role;
-  final String section;
-  final String title;
-  final String description;
-
-  const _RolePlaceholderScreen({
-    required this.role,
-    required this.section,
-    required this.title,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ScreenTrace(
-      tag: 'ROLE_${role.toUpperCase()}_$section',
-      role: role,
-      message: 'Pantalla $section del rol $role cargada. Modulo temporal listo para diseno.',
-      child: Container(
-        color: const Color(0xFFF6F7F9),
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 720),
-            margin: const EdgeInsets.all(24),
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x120F172A),
-                  blurRadius: 20,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${role.toUpperCase()} • $section',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF374151),
-                      fontFamily: 'Ubuntu-Medium',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    color: Color(0xFF111827),
-                    fontFamily: 'Ubuntu-Bold',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: Color(0xFF6B7280),
-                    fontFamily: 'Ubuntu-Regular',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
