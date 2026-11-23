@@ -402,11 +402,13 @@ class _SignupMobileState extends State<SignupMobile> {
         Expanded(
           child: DropdownButtonFormField<UserGender>(
             value: provider.selectedGender,
+            // isExpanded evita el desbordamiento del texto en pantallas de ~360 dp.
+            isExpanded: true,
             onChanged: (gender) => provider.setSelectedGender(gender),
             items: UserGender.values
                 .map((g) => DropdownMenuItem(
                       value: g,
-                      child: Text(g.displayName),
+                      child: Text(g.displayName, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
             decoration: _inputDecoration(label: 'Género', icon: Icons.people_outline),
@@ -418,6 +420,7 @@ class _SignupMobileState extends State<SignupMobile> {
               ? const Center(child: CircularProgressIndicator())
               : DropdownButtonFormField<UserRole>(
                   value: provider.selectedRole,
+                  isExpanded: true,
                   hint: const Text('Rol'),
                   onChanged: (role) => provider.setSelectedRole(role),
                   items: UserRole.values
@@ -427,7 +430,7 @@ class _SignupMobileState extends State<SignupMobile> {
                       })
                       .map((r) => DropdownMenuItem(
                             value: r,
-                            child: Text(r.displayName),
+                            child: Text(r.displayName, overflow: TextOverflow.ellipsis),
                           ))
                       .toList(),
                   decoration: _inputDecoration(label: 'Rol', icon: Icons.work_outline),

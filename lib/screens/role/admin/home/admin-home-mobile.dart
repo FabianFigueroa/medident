@@ -126,7 +126,7 @@ class _Header extends StatelessWidget {
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                  MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
                 ),
                 child: _AdminNotificationBadge(),
               ),

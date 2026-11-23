@@ -9,6 +9,62 @@ import 'package:medident/core/models/turno-model.dart';
 import 'package:medident/core/models/treatment-confession-model.dart';
 import 'package:medident/core/models/story-model.dart';
 
+/// La franja elegida ya tiene una cita activa del mismo profesional.
+class SlotTakenException implements Exception {
+  final String timeSlot;
+  const SlotTakenException(this.timeSlot);
+
+  String get message =>
+      'La franja de las $timeSlot ya está ocupada para ese profesional. Elige otra hora.';
+
+  @override
+  String toString() => message;
+}
+
+/// Datos de un turno que no cumplen las reglas del ERS (RN-19, RN-20).
+class InvalidTurnoException implements Exception {
+  final String message;
+  const InvalidTurnoException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+int? _minutesOf(String hhmm) {
+  final parts = hhmm.split(':');
+  if (parts.length != 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+/// Horario HH:MM con fin posterior al inicio (RN-20). Devuelve el error o null.
+String? validateHorario(String startTime, String endTime) {
+  final start = _minutesOf(startTime.trim());
+  final end = _minutesOf(endTime.trim());
+  if (start == null || end == null) {
+    return 'Las horas deben tener el formato HH:MM.';
+  }
+  if (end <= start) {
+    return 'La hora de fin debe ser posterior a la de inicio.';
+  }
+  return null;
+}
+
+/// Reglas de un turno nuevo. Devuelve el mensaje de error o null si es válido.
+/// RN-19: pertenece a un empleado registrado. RN-20: fin posterior al inicio.
+String? validateTurno({
+  required String? employeeId,
+  required String startTime,
+  required String endTime,
+}) {
+  if (employeeId == null || employeeId.isEmpty || employeeId.startsWith('manual_')) {
+    return 'Elige un empleado registrado de la clínica.';
+  }
+  return validateHorario(startTime, endTime);
+}
+
 class ClinicService {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
@@ -239,22 +295,98 @@ class ClinicService {
     String? patientPhoto,
     String? notes,
   }) async {
+    // RNF-03: cero doble reserva. Primero se buscan citas activas del mismo
+    // profesional, día y franja (incluye las creadas sin bloqueo); después se
+    // reserva la franja con una transacción sobre un documento de bloqueo, de
+    // modo que dos reservas simultáneas no puedan pasar las dos.
+    final slot = timeSlot.trim();
+    if (await _isSlotTaken(dentistId: dentistId, date: date, timeSlot: slot)) {
+      throw SlotTakenException(slot);
+    }
+
     final ref = _firestore.collection('appointments').doc();
-    await ref.set({
-      'clinicId': clinicId,
-      'patientId': patientId,
-      'patientName': patientName,
-      'patientPhoto': patientPhoto,
-      'dentistId': dentistId,
-      'dentistName': dentistName ?? '',
-      'treatmentName': treatmentName,
-      'date': Timestamp.fromDate(date),
-      'timeSlot': timeSlot,
-      'notes': notes,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
+    final lockRef = _firestore
+        .collection('appointment_slots')
+        .doc(_slotLockId(dentistId, date, slot));
+
+    await _firestore.runTransaction((tx) async {
+      final lock = await tx.get(lockRef);
+      if (lock.exists) {
+        final previousId = lock.data()?['appointmentId'] as String?;
+        if (previousId != null && previousId.isNotEmpty) {
+          final previous = await tx.get(
+              _firestore.collection('appointments').doc(previousId));
+          final status = previous.data()?['status'] as String?;
+          final fechaPrevia = previous.data()?['date'];
+          final mismoDia = fechaPrevia is Timestamp &&
+              fechaPrevia.toDate().year == date.year &&
+              fechaPrevia.toDate().month == date.month &&
+              fechaPrevia.toDate().day == date.day;
+          // Un bloqueo de una cita que se reagendó a otra franja ya no ocupa esta.
+          final mismaFranja = mismoDia && previous.data()?['timeSlot'] == slot;
+          if (previous.exists && mismaFranja && _activeStatuses.contains(status)) {
+            throw SlotTakenException(slot);
+          }
+        }
+      }
+      tx.set(ref, {
+        'clinicId': clinicId,
+        'patientId': patientId,
+        'patientName': patientName,
+        'patientPhoto': patientPhoto,
+        'dentistId': dentistId,
+        'dentistName': dentistName ?? '',
+        'treatmentName': treatmentName,
+        'date': Timestamp.fromDate(date),
+        'timeSlot': slot,
+        'notes': notes,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      tx.set(lockRef, {
+        'appointmentId': ref.id,
+        'dentistId': dentistId,
+        'clinicId': clinicId,
+        'timeSlot': slot,
+        'date': Timestamp.fromDate(date),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
     return ref.id;
+  }
+
+  static const _activeStatuses = ['pending', 'confirmed'];
+
+  static String _slotLockId(String dentistId, DateTime date, String timeSlot) {
+    final d = date.toLocal();
+    final day = '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+    return '${dentistId}_${day}_${timeSlot.replaceAll(':', '')}';
+  }
+
+  /// Consulta solo por igualdad (dentistId y timeSlot) para no depender de un
+  /// índice compuesto; el día y el estado se filtran en memoria.
+  Future<bool> _isSlotTaken({
+    required String dentistId,
+    required DateTime date,
+    required String timeSlot,
+  }) async {
+    if (dentistId.isEmpty) return false;
+    final snap = await _firestore
+        .collection('appointments')
+        .where('dentistId', isEqualTo: dentistId)
+        .where('timeSlot', isEqualTo: timeSlot)
+        .get();
+    final target = date.toLocal();
+    return snap.docs.any((doc) {
+      final data = doc.data();
+      final ts = data['date'];
+      if (ts is! Timestamp) return false;
+      final d = ts.toDate().toLocal();
+      return d.year == target.year &&
+          d.month == target.month &&
+          d.day == target.day &&
+          _activeStatuses.contains(data['status']);
+    });
   }
 
   Future<bool> leaveClinic(String clinicId, String userId) async {
@@ -320,6 +452,9 @@ class ClinicService {
     required String endTime,
     String? notes,
   }) async {
+    final invalid = validateTurno(
+        employeeId: employeeId, startTime: startTime, endTime: endTime);
+    if (invalid != null) throw InvalidTurnoException(invalid);
     final ref = _firestore.collection('turnos').doc();
     await ref.set({
       'clinicId': clinicId,

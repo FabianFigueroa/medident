@@ -79,7 +79,7 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
               onNotificationPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const NotificationScreen()),
+                    builder: (_) => NotificationScreen.conProveedor(context)),
               ),
               onSearchPressed: () {},
               onScannerPressed: () {},
@@ -134,7 +134,7 @@ class _PatientHomeMobileState extends State<PatientHomeMobile> {
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                    MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
                   ),
                   child: _NotificationBadge(),
                 ),

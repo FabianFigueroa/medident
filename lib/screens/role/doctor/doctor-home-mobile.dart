@@ -86,7 +86,7 @@ class _DoctorHomeMobileState extends State<DoctorHomeMobile> {
               onNotificationPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const NotificationScreen()),
+                    builder: (_) => NotificationScreen.conProveedor(context)),
               ),
               onSearchPressed: () {},
               onScannerPressed: () {},

@@ -34,13 +34,16 @@ Future<void> main() async {
     return app;
   });
 
-  // Datos demo: diferido, nunca en el camino crítico del arranque (el usuario
-  // compila release, por lo que el gate por kDebugMode lo volvería inerte).
-  unawaited(Future<void>.delayed(const Duration(seconds: 10), () async {
-    try {
-      await FirebaseSeeder.seedOnce();
-    } catch (_) {}
-  }));
+  // Datos demo: solo si se compila con --dart-define=SEED_DEMO_DATA=true
+  // (apagado por defecto para no escribir en el proyecto real de Firebase).
+  // Diferido para no estar en el camino crítico del arranque.
+  if (FirebaseSeeder.habilitado) {
+    unawaited(Future<void>.delayed(const Duration(seconds: 10), () async {
+      try {
+        await FirebaseSeeder.seedOnce();
+      } catch (_) {}
+    }));
+  }
 
   runApp(MyApp(firebaseFuture: firebaseFuture));
 }
@@ -138,6 +141,23 @@ class _MyAppState extends State<MyApp> {
         builder: (context, snapshot) {
           final ready = snapshot.connectionState == ConnectionState.done &&
               snapshot.hasData;
+          if (snapshot.hasError) {
+            // Antes el splash esperaba para siempre si Firebase fallaba.
+            return _materialApp(
+              home: Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'No se pudo conectar con el servidor. Revisa tu conexión '
+                      'y vuelve a abrir la app.\n\n${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           if (!ready) {
             return _materialApp(
               home: const SplashScreen(isAuthenticating: true),

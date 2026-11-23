@@ -210,7 +210,7 @@ class _DentistHomeMobileState extends State<DentistHomeMobile> {
               },
               onNotificationPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
               ),
               onCarouselItemTapped: (item) {},
               onProfileCardTapped: (_) {},

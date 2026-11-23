@@ -85,7 +85,11 @@ class _PersonalAgendaViewState extends State<PersonalAgendaView> {
       return;
     }
     _initializedForUserId = mainProvider.userId;
-    _initialize(mainProvider);
+    // initializeSection notifica a los listeners; llamarlo durante la
+    // construcción rompía el árbol ("setState() called during build").
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initialize(mainProvider);
+    });
   }
 
   Future<void> _initialize(MainProviderBase mainProvider) async {
@@ -153,7 +157,7 @@ class _PersonalAgendaViewState extends State<PersonalAgendaView> {
             icon: const Icon(Icons.notifications_none_rounded),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
             ),
           ),
           const SizedBox(width: 4),
@@ -374,7 +378,10 @@ class _PersonalAgendaViewState extends State<PersonalAgendaView> {
             else
               Row(
                 children: [
-                  if (appointment.status != 'confirmed')
+                  // RN-30: solo una cita pendiente se confirma, y la confirma
+                  // el profesional o la clínica, no el paciente de la cita.
+                  if (appointment.status == 'pending' &&
+                      appointment.patientId != prov.userId)
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
@@ -391,8 +398,11 @@ class _PersonalAgendaViewState extends State<PersonalAgendaView> {
                         ),
                       ),
                     ),
-                  if (appointment.status != 'confirmed')
+                  if (appointment.status == 'pending' &&
+                      appointment.patientId != prov.userId)
                     const SizedBox(width: 10),
+                  if (appointment.status == 'pending' ||
+                      appointment.status == 'confirmed')
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
@@ -459,7 +469,7 @@ class _AgendaBody extends StatelessWidget {
     if (!weekView) {
       final k = _key(selectedDay);
       return filtered.where((a) => _key(a.date) == k).toList()
-        ..sort((a, b) => a.date.compareTo(b.date));
+        ..sort(_porFechaYHora);
     }
     final end = weekStart.add(const Duration(days: 7));
     return filtered
@@ -467,7 +477,7 @@ class _AgendaBody extends StatelessWidget {
             !_dateOnly(a.date).isBefore(weekStart) &&
             _dateOnly(a.date).isBefore(end))
         .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+      ..sort(_porFechaYHora);
   }
 
   @override
@@ -852,7 +862,11 @@ class _AgendaBody extends StatelessWidget {
         return da.compareTo(db);
       });
     for (final k in sortedKeys) {
-      final list = groups[k]!..sort((a, b) => a.date.compareTo(b.date));
+      final list = groups[k]!
+        ..sort((a, b) {
+          final c = a.date.compareTo(b.date);
+          return c != 0 ? c : a.timeSlot.compareTo(b.timeSlot);
+        });
       final day = list.first.date;
       final isToday = _dateOnly(day) == _dateOnly(DateTime.now());
       widgets.add(Padding(
@@ -1015,7 +1029,11 @@ class _PersonalTurnosViewState extends State<PersonalTurnosView> {
       return;
     }
     _initializedForUserId = mainProvider.userId;
-    _initialize(mainProvider);
+    // initializeSection notifica a los listeners; llamarlo durante la
+    // construcción rompía el árbol ("setState() called during build").
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initialize(mainProvider);
+    });
   }
 
   Future<void> _initialize(MainProviderBase mainProvider) async {
@@ -1046,7 +1064,7 @@ class _PersonalTurnosViewState extends State<PersonalTurnosView> {
             icon: const Icon(Icons.notifications_none_rounded),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
             ),
           ),
           const SizedBox(width: 4),
@@ -1343,7 +1361,11 @@ class _PersonalTurnosViewState extends State<PersonalTurnosView> {
     final pending = t.attendanceStatus == 'pending';
     final confirmed = t.attendanceStatus == 'confirmed';
     final declined = t.attendanceStatus == 'declined';
-    final canRespond = pending && _daysUntil(t) >= 0 && _daysUntil(t) <= 7;
+    final canRespond = pending &&
+        t.status != 'completed' &&
+        t.status != 'cancelled' &&
+        _daysUntil(t) >= 0 &&
+        _daysUntil(t) <= 7;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(13),
@@ -1580,7 +1602,10 @@ class _PersonalTurnosViewState extends State<PersonalTurnosView> {
         ],
       ),
     );
-    reasonCtrl.dispose();
+    // El diálogo sigue animando su salida (y usando el TextField) un momento
+    // después de cerrarse; liberar el controlador en ese instante rompía la
+    // pantalla. Se libera cuando la animación ya terminó.
+    Future.delayed(const Duration(milliseconds: 600), reasonCtrl.dispose);
     if (reason == null) return;
     try {
       await provider.declineAttendance(turno,
@@ -1929,3 +1954,8 @@ class _NoClinicState extends StatelessWidget {
   }
 }
 
+/// Ordena citas por día y, dentro del día, por franja horaria (HH:mm).
+int _porFechaYHora(AppointmentModel a, AppointmentModel b) {
+  final c = a.date.compareTo(b.date);
+  return c != 0 ? c : a.timeSlot.compareTo(b.timeSlot);
+}

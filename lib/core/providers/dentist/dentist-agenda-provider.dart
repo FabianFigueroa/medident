@@ -111,7 +111,7 @@ class DentistAgendaProvider extends ChangeNotifier {
         .length;
   }
 
-  int get pendingCount => mine.where((a) => a.status != 'confirmed').length;
+  int get pendingCount => mine.where((a) => a.status == 'pending').length;
 
   int get uniquePatientsCount => mine.map((a) => a.patientId).toSet().length;
 

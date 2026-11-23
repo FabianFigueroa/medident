@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:medident/core/models/turno-model.dart';
 import 'package:medident/core/models/turno-request-model.dart';
+import 'package:medident/core/services/clinic-service.dart' show validateHorario;
 
 enum DayStatus {
   free('Libre', Icons.check_circle, Color(0xFF22C55E), Color(0xFFDCFCE7)),
@@ -335,7 +336,33 @@ class AgendaService {
   }
 
   Future<void> updateRequestStatus(String requestId, String status, String employeeId) async {
-    await _firestore.collection('turno_requests').doc(requestId).update({'status': status});
+    final requestRef = _firestore.collection('turno_requests').doc(requestId);
+    await requestRef.update({
+      'status': status,
+      'resolvedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Al aprobar un cambio de horario se aplica el horario pedido al turno
+    // (antes solo cambiaba el estado de la solicitud y el turno seguía igual).
+    if (status == 'approved') {
+      final data = (await requestRef.get()).data();
+      if (data != null && data['type'] == 'cambio_horario') {
+        final turnoId = data['turnoId'] as String?;
+        final start = data['requestedStartTime'] as String?;
+        final end = data['requestedEndTime'] as String?;
+        if (turnoId != null && turnoId.isNotEmpty && start != null && end != null &&
+            validateHorario(start, end) == null) {
+          await _firestore.collection('turnos').doc(turnoId).update({
+            'startTime': start,
+            'endTime': end,
+            if (data['requestedDate'] is Timestamp) 'date': data['requestedDate'],
+            // El horario cambió: la asistencia se vuelve a confirmar.
+            'attendanceStatus': 'pending',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
 
     // Send notification
     await _firestore.collection('notifications').add({

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:medident/core/models/turno-model.dart';
 import 'package:medident/core/services/agenda-service.dart';
+import 'package:medident/core/services/clinic-service.dart' show validateHorario;
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 
 class RequestTurnoChangeSheet extends StatefulWidget {
@@ -44,6 +45,7 @@ class _RequestTurnoChangeSheetState extends State<RequestTurnoChangeSheet> {
   final _endCtrl = TextEditingController();
   DateTime? _requestedDate;
   bool _saving = false;
+  String? _error;
 
   @override
   void initState() {
@@ -112,6 +114,19 @@ class _RequestTurnoChangeSheetState extends State<RequestTurnoChangeSheet> {
       _snack('Selecciona el turno que quieres gestionar');
       return;
     }
+    // Antes las horas aceptaban cualquier texto y no se pedía la fecha.
+    if (_needsSchedule) {
+      if (_requestedDate == null) {
+        _snack('Elige la fecha del nuevo horario');
+        return;
+      }
+      final horario = validateHorario(_startCtrl.text, _endCtrl.text);
+      if (horario != null) {
+        _snack(horario);
+        return;
+      }
+    }
+    setState(() => _error = null);
 
     final clinicId = context.read<AuthenticateProvider>().user?.clinicId;
     setState(() => _saving = true);
@@ -152,14 +167,9 @@ class _RequestTurnoChangeSheetState extends State<RequestTurnoChangeSheet> {
     }
   }
 
+  /// El error se muestra dentro de la hoja: un SnackBar quedaba tapado por ella.
   void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFFDC2626),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    setState(() => _error = message);
   }
 
   @override
@@ -207,7 +217,7 @@ class _RequestTurnoChangeSheetState extends State<RequestTurnoChangeSheet> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Solicitante: ${widget.employeeName} (${widget.employeeId})',
+                    'Solicitante: ${widget.employeeName}',
                     style: const TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
@@ -342,6 +352,14 @@ class _RequestTurnoChangeSheetState extends State<RequestTurnoChangeSheet> {
                     : 'Explica el cambio que necesitas y el motivo...',
               ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!,
+                  style: const TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+            ],
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,

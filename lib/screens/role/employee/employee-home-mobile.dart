@@ -79,7 +79,7 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
               onNotificationPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const NotificationScreen()),
+                    builder: (_) => NotificationScreen.conProveedor(context)),
               ),
               onSearchPressed: () {},
               onScannerPressed: () {},
@@ -89,15 +89,19 @@ class _EmployeeHomeMobileState extends State<EmployeeHomeMobile> {
             _buildQuickActions(),
             _buildClinicBanner(),
             const SliverToBoxAdapter(child: ClinicsPromotionCard()),
-            PendingClinicInvitesCard(
-              userId: main.userId,
-              onAccepted: () {
-                context
-                    .read<EmployeeMainProvider>()
-                    .clinicProvider
-                    ?.checkClinicStatus(main.userId);
-                context.read<EmployeeHomeProvider>().loadInitialData();
-              },
+            // La tarjeta devuelve widgets de caja; dentro de un CustomScrollView
+            // tiene que ir envuelta en un sliver (antes rompía todo el home).
+            SliverToBoxAdapter(
+              child: PendingClinicInvitesCard(
+                userId: main.userId,
+                onAccepted: () {
+                  context
+                      .read<EmployeeMainProvider>()
+                      .clinicProvider
+                      ?.checkClinicStatus(main.userId);
+                  context.read<EmployeeHomeProvider>().loadInitialData();
+                },
+              ),
             ),
             if (isLoading) ...[
               _buildShimmerSection(),

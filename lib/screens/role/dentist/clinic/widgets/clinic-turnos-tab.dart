@@ -7,6 +7,8 @@ import 'package:medident/core/models/turno-request-model.dart';
 import 'package:medident/core/services/agenda-service.dart';
 import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
+import 'package:medident/core/services/clinic-service.dart' show InvalidTurnoException, validateTurno;
+import 'package:medident/core/services/employees/employees-service.dart';
 
 class ClinicTurnosTab extends StatefulWidget {
   final bool isOwner;
@@ -570,7 +572,8 @@ class _TurnoCard extends StatelessWidget {
               } catch (_) {}
             },
             itemBuilder: (_) => [
-              if (t.status != 'active' && t.status != 'completed') const PopupMenuItem(value: 'start', child: ListTile(leading: Icon(Icons.play_arrow, color: Colors.green), title: Text('Iniciar'))),
+              // RN-24: solo un turno programado se puede iniciar (no uno cancelado).
+              if (t.status == 'scheduled') const PopupMenuItem(value: 'start', child: ListTile(leading: Icon(Icons.play_arrow, color: Colors.green), title: Text('Iniciar'))),
               if (t.status == 'active') const PopupMenuItem(value: 'complete', child: ListTile(leading: Icon(Icons.check_circle, color: Colors.blue), title: Text('Completar'))),
               if (t.status != 'cancelled' && t.status != 'completed') const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.cancel, color: Colors.orange), title: Text('Cancelar'))),
               const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete, color: Colors.red), title: Text('Eliminar'))),
@@ -610,10 +613,32 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
   List<Map<String, dynamic>> _availableDoctors = [];
   bool _loadingDoctors = true;
 
+  /// Turnos del día leídos del proveedor, para que la hoja se actualice
+  /// apenas se asigna o elimina un turno sin tener que cerrarla.
+  List<TurnoModel> get _turnos {
+    final d = widget.day;
+    final vivos = widget.clinicProv.turnos.where((t) =>
+        t.date.year == d.year && t.date.month == d.month && t.date.day == d.day);
+    return vivos.isEmpty && widget.clinicProv.turnos.isEmpty
+        ? widget.turnos
+        : vivos.toList();
+  }
+
+  void _alCambiarProveedor() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.clinicProv.addListener(_alCambiarProveedor);
     _loadDoctors();
+  }
+
+  @override
+  void dispose() {
+    widget.clinicProv.removeListener(_alCambiarProveedor);
+    super.dispose();
   }
 
   Future<void> _loadDoctors() async {
@@ -671,10 +696,10 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
               Text('$weekday, ', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               Text(dayStr, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
               const Spacer(),
-              Text('${widget.turnos.length} turno(s)', style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+              Text('${_turnos.length} turno(s)', style: TextStyle(fontSize: 13, color: Colors.grey[500])),
             ]),
             const SizedBox(height: 16),
-            if (widget.turnos.isEmpty)
+            if (_turnos.isEmpty)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
@@ -714,7 +739,7 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
                 ]),
               )
             else
-              ...widget.turnos.map((t) => ListTile(
+              ..._turnos.map((t) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   backgroundColor: Colors.teal.withOpacity(0.1),
@@ -725,9 +750,22 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.teal.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Text(t.status, style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.w600)),
+                  child: Text(_estadoTurno(t.status), style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.w600)),
                 ),
               )),
+            // Antes solo se podía asignar en días sin turnos.
+            if (_turnos.isNotEmpty && widget.canManage) ...[
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: () => _showAddEmployee(context),
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text('Vincular empleado'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.teal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              )),
+            ],
           ],
         ),
       ),
@@ -735,15 +773,22 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
   }
 
   void _showAddEmployee(BuildContext ctx) {
-    final nameCtrl = TextEditingController();
     final startCtrl = TextEditingController(text: '08:00');
     final endCtrl = TextEditingController(text: '17:00');
+    final clinicId = widget.clinicProv.clinic?.id ?? '';
+    // RN-19: el turno se asigna a un empleado registrado de la clínica
+    // (clinics/{id}/employees), no a un nombre escrito a mano.
+    final employeesFuture = EmployeesService().getEmployeesByClinic(clinicId);
+    Map<String, dynamic>? selected;
+    String? error;
+    bool saving = false;
 
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx2) => Container(
+      builder: (ctx2) => StatefulBuilder(
+        builder: (ctx2, setSheet) => Container(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx2).viewInsets.bottom),
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -759,32 +804,87 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
               const SizedBox(height: 16),
               const Text('Nuevo empleado', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre completo', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder())),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: employeesFuture,
+                builder: (_, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                    );
+                  }
+                  final employees = (snap.data ?? [])
+                      .where((e) => e['isActive'] != false)
+                      .toList();
+                  if (employees.isEmpty) {
+                    return Text(
+                      'La clínica no tiene empleados vinculados. Vincúlalos primero desde la pestaña Equipo.',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    );
+                  }
+                  return DropdownButtonFormField<String>(
+                    initialValue: selected?['id'] as String?,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Empleado', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder()),
+                    items: employees
+                        .map((e) => DropdownMenuItem<String>(
+                              value: e['id'] as String,
+                              child: Text((e['fullName'] ?? e['name'] ?? 'Sin nombre').toString(),
+                                  overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: (id) => setSheet(() {
+                      selected = employees.firstWhere((e) => e['id'] == id);
+                      error = null;
+                    }),
+                  );
+                },
+              ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: TextField(
                   controller: startCtrl,
                   readOnly: true,
-                  onTap: () => _pickTime(startCtrl),
+                  onTap: () async {
+                    await _pickTime(startCtrl);
+                    setSheet(() => error = null);
+                  },
                   decoration: const InputDecoration(labelText: 'Inicio', prefixIcon: Icon(Icons.access_time), border: OutlineInputBorder()),
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: TextField(
                   controller: endCtrl,
                   readOnly: true,
-                  onTap: () => _pickTime(endCtrl),
+                  onTap: () async {
+                    await _pickTime(endCtrl);
+                    setSheet(() => error = null);
+                  },
                   decoration: const InputDecoration(labelText: 'Fin', prefixIcon: Icon(Icons.access_time), border: OutlineInputBorder()),
                 )),
               ]),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
               const SizedBox(height: 20),
               SizedBox(width: double.infinity, height: 48, child: ElevatedButton(
-                onPressed: () async {
-                  if (nameCtrl.text.trim().isEmpty) return;
+                onPressed: saving ? null : () async {
+                  final validation = validateTurno(
+                    employeeId: selected?['id'] as String?,
+                    startTime: startCtrl.text.trim(),
+                    endTime: endCtrl.text.trim(),
+                  );
+                  if (validation != null) {
+                    setSheet(() => error = validation);
+                    return;
+                  }
+                  setSheet(() => saving = true);
                   try {
                     await widget.clinicProv.createTurno(
                       dentistId: widget.userId,
-                      employeeId: 'manual_${DateTime.now().millisecondsSinceEpoch}',
-                      employeeName: nameCtrl.text.trim(),
+                      employeeId: selected!['id'] as String,
+                      employeeName: (selected!['fullName'] ?? selected!['name'] ?? '').toString(),
+                      employeePhoto: selected!['imageUrl'] as String?,
                       date: widget.day,
                       startTime: startCtrl.text.trim(),
                       endTime: endCtrl.text.trim(),
@@ -792,7 +892,10 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
                     if (ctx2.mounted) Navigator.pop(ctx2);
                     widget.onRefresh();
                   } catch (e) {
-                    if (ctx2.mounted) ScaffoldMessenger.of(ctx2).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                    setSheet(() {
+                      saving = false;
+                      error = e is InvalidTurnoException ? e.message : 'Error: $e';
+                    });
                   }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
@@ -801,6 +904,7 @@ class _DayEmployeeSheetState extends State<_DayEmployeeSheet> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -887,5 +991,15 @@ String _requestTypeLabel(String type) {
       return 'Intercambio';
     default:
       return 'Novedad';
+  }
+}
+
+/// Nombre en español del estado de un turno (scheduled, active, completed, cancelled).
+String _estadoTurno(String status) {
+  switch (status) {
+    case 'active': return 'Activo';
+    case 'completed': return 'Completado';
+    case 'cancelled': return 'Cancelado';
+    default: return 'Programado';
   }
 }

@@ -15,6 +15,10 @@ class FirebaseServices {
     // ✅ CORREGIDO: Habilitar persistencia para todas las plataformas
     _firestore = FirebaseFirestore.instance;
     
+    // Con el Emulator Suite no se tocan los settings: reasignarlos después de
+    // useFirestoreEmulator puede devolver el cliente al servidor real.
+    if (EmulatorConfig.enabled) return;
+
     // Configuración específica por plataforma
     if (kIsWeb) {
       // ⚠️ Web: persistencia local (evita múltiples conexiones)
