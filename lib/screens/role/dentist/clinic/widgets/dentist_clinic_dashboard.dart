@@ -181,7 +181,7 @@ class _DentistClinic_DashboardState extends State<DentistClinic_Dashboard> with 
           SliverOverlapAbsorber(
             handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
             sliver: SliverAppBar(
-              expandedHeight: 428,
+              expandedHeight: clinicTreatments.isNotEmpty ? 528 : 428,
               pinned: true,
               elevation: 0,
               scrolledUnderElevation: 0.5,

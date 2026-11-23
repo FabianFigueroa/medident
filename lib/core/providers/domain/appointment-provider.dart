@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:medident/core/models/appointment-model.dart';
 import 'package:medident/core/services/domain/appointment-service.dart';
@@ -32,7 +33,8 @@ class AppointmentProvider extends ChangeNotifier {
   }
 
   int get pendingAppointmentsCount {
-    return _appointments.where((a) => a.status != 'confirmed').length;
+    // Solo las pendientes (antes contaba canceladas y completadas).
+    return _appointments.where((a) => a.status == 'pending').length;
   }
 
   List<AppointmentModel> getByDate(DateTime date) {
@@ -101,8 +103,10 @@ class AppointmentProvider extends ChangeNotifier {
       await _service.updateAppointmentStatus(appointmentId, status);
       final i = _appointments.indexWhere((a) => a.id == appointmentId);
       if (i != -1) {
-        _appointments[i] = _appointments[i].copyWith(status: status);
+        final cita = _appointments[i];
+        _appointments[i] = cita.copyWith(status: status);
         notifyListeners();
+        await _avisarPaciente(cita, status);
       }
     } catch (e) {
       debugPrint('AppointmentProvider.updateStatus error: $e');
@@ -125,5 +129,27 @@ class AppointmentProvider extends ChangeNotifier {
   void dispose() {
     _sub?.cancel();
     super.dispose();
+  }
+
+  /// Deja un aviso al paciente cuando su cita se confirma o se cancela.
+  Future<void> _avisarPaciente(AppointmentModel cita, String status) async {
+    if (status != 'confirmed' && status != 'cancelled') return;
+    if (cita.patientId.isEmpty) return;
+    final d = cita.date;
+    final fecha = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': cita.patientId,
+        'type': 'appointment',
+        'title': status == 'confirmed' ? 'Cita confirmada' : 'Cita cancelada',
+        'body': status == 'confirmed'
+            ? 'Tu cita de ${cita.treatmentName} del $fecha a las ${cita.timeSlot} fue confirmada.'
+            : 'Tu cita de ${cita.treatmentName} del $fecha a las ${cita.timeSlot} fue cancelada.',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('AppointmentProvider._avisarPaciente error: $e');
+    }
   }
 }

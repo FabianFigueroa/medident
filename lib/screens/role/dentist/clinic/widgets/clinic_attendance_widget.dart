@@ -30,8 +30,9 @@ class ClinicAttendanceWidget extends StatelessWidget {
                     .snapshots(),
                 builder: (context, snap) {
                   if (!snap.hasData) return const SizedBox.shrink();
-                  final total = snap.data!.docs.length;
-                  final active = snap.data!.docs.where((d) {
+                  final personal = snap.data!.docs.where(_esPersonal).toList();
+                  final total = personal.length;
+                  final active = personal.where((d) {
                     final data = d.data() as Map<String, dynamic>;
                     return data['isInClinic'] == true;
                   }).length;
@@ -64,7 +65,8 @@ class ClinicAttendanceWidget extends StatelessWidget {
                 );
               }
 
-              final docs = snap.data!.docs;
+              // Solo el equipo de la clínica; los pacientes vinculados no son personal.
+              final docs = snap.data!.docs.where(_esPersonal).toList();
               if (docs.isEmpty) {
                 return SizedBox(
                   height: 60,
@@ -256,8 +258,15 @@ class _EmployeeAttendanceCard extends StatelessWidget {
         return 'Empleado/a';
       case 'admin':
         return 'Admin';
+      case 'doctor':
+        return 'Médico/a';
       default:
         return role;
     }
   }
+}
+
+bool _esPersonal(QueryDocumentSnapshot d) {
+  final data = d.data() as Map<String, dynamic>;
+  return data['role'] != 'patient';
 }

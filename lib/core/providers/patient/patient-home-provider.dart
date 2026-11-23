@@ -29,7 +29,9 @@ class PatientHomeProvider with ChangeNotifier {
 
     try {
       _dashboardData = await _service.getDashboard(userId);
-      _globalPromotions = (_dashboardData['globalPromotions'] as List<ProductModel>?) ?? [];
+      _globalPromotions = ((_dashboardData['globalPromotions'] as List?) ?? const [])
+          .whereType<ProductModel>()
+          .toList();
     } catch (e) {
       _error = e.toString();
       debugPrint('PatientHomeProvider.loadInitialData error: $e');

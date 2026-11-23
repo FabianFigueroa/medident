@@ -33,8 +33,10 @@ class DentistTurnosProvider extends ChangeNotifier {
   int get upcomingCount =>
       _turnos.where((t) => t.isUpcoming).length;
 
+  /// Turnos en curso: solo los iniciados (antes sumaba también los programados
+  /// y repetía el número de «Próximos»). Acepta 'in_progress' por RN-23.
   int get activeCount => _turnos
-      .where((t) => t.status == 'active' || t.status == 'scheduled')
+      .where((t) => t.status == 'active' || t.status == 'in_progress')
       .length;
 
   List<TurnoModel> byDay(DateTime day) {

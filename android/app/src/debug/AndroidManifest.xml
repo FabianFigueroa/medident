@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Solo en debug: el Firebase Emulator Suite (Auth) se sirve por HTTP
+         en 127.0.0.1 a través de adb reverse. La versión release no cambia. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

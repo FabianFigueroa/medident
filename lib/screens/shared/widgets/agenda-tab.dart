@@ -107,7 +107,8 @@ class _StatsBar extends StatelessWidget {
         a.date.year == now.year && a.date.month == now.month && a.date.day == now.day).length;
     final week = appointments.where((a) =>
         a.date.isAfter(now.subtract(const Duration(days: 7)))).length;
-    final pending = appointments.where((a) => a.status != 'confirmed').length;
+    // Solo las pendientes: antes contaba también canceladas y completadas.
+    final pending = appointments.where((a) => a.status == 'pending').length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -166,7 +167,12 @@ class _AppointmentsList extends StatelessWidget {
     final now = DateTime.now();
     final upcoming = appointments.where((a) =>
         a.date.isAfter(now.subtract(const Duration(days: 1)))).toList();
-    upcoming.sort((a, b) => a.date.compareTo(b.date));
+    // Por día y, dentro del día, por franja horaria (HH:mm).
+    upcoming.sort((a, b) {
+      final c = DateTime(a.date.year, a.date.month, a.date.day)
+          .compareTo(DateTime(b.date.year, b.date.month, b.date.day));
+      return c != 0 ? c : a.timeSlot.compareTo(b.timeSlot);
+    });
 
     if (upcoming.isEmpty) {
       return Padding(
@@ -357,9 +363,13 @@ class _AppointmentCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(children: [
-                  Text(appointment.timeSlot.split(':').first,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isConfirmed ? Colors.green[700] : Colors.grey[600])),
-                  const Text('min', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  // Antes mostraba solo la hora con la etiqueta «min» (p. ej. «11 min»).
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(appointment.timeSlot,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isConfirmed ? Colors.green[700] : Colors.grey[600])),
+                  ),
+                  const Text('hora', style: TextStyle(fontSize: 10, color: Colors.grey)),
                 ]),
               ),
               const SizedBox(width: 12),
@@ -375,18 +385,27 @@ class _AppointmentCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isConfirmed ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isConfirmed ? 'Confirmada' : 'Pendiente',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                    color: isConfirmed ? Colors.green[700] : Colors.orange[700]),
-                ),
-              ),
+              // La insignia muestra el estado real (antes una cancelada decía «Pendiente»).
+              Builder(builder: (_) {
+                final (label, color) = switch (appointment.status) {
+                  'confirmed' => ('Confirmada', Colors.green),
+                  'cancelled' => ('Cancelada', Colors.red),
+                  'completed' => ('Completada', Colors.indigo),
+                  _ => ('Pendiente', Colors.orange),
+                };
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                      color: color[700]),
+                  ),
+                );
+              }),
             ]),
           ),
         ),
@@ -767,7 +786,8 @@ class _TimeSlotTile extends StatelessWidget {
                     else if (v == 'delete') onDelete?.call();
                   },
                   itemBuilder: (_) => [
-                    if (!isConfirmed)
+                    // RN-30: una cita cancelada no vuelve a confirmed.
+                    if (appointment?.status == 'pending')
                       const PopupMenuItem(value: 'confirm', child: ListTile(leading: Icon(Icons.check_circle, color: Colors.green), title: Text('Confirmar'))),
                     if (isConfirmed)
                       const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.cancel, color: Colors.orange), title: Text('Cancelar'))),
@@ -961,13 +981,16 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
           ),
           child: Column(
             children: [
-              Text(hour,
-                style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold,
-                  color: _statusColor,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(apt.timeSlot.isNotEmpty ? apt.timeSlot : hour,
+                  style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold,
+                    color: _statusColor,
+                  ),
                 ),
               ),
-              Text('min',
+              Text('hora',
                 style: TextStyle(fontSize: 10, color: Colors.grey[400]),
               ),
             ],
@@ -1043,17 +1066,22 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
                 children: [
                   Icon(d['icon'] as IconData, size: 16, color: Colors.grey[400]),
                   const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(d['label'] as String,
-                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                      ),
-                      Text(d['value'] as String,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                  // Expanded + ellipsis: la fecha larga desbordaba en celulares de ~360 dp.
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(d['label'] as String,
+                          style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                        ),
+                        Text(d['value'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1096,7 +1124,8 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
 
     final actions = <_ActionItem>[];
 
-    if (isPending || isCancelled) {
+    // RN-30: una cita cancelada no vuelve a confirmed; se agenda de nuevo.
+    if (isPending) {
       actions.add(_ActionItem(
         icon: Icons.check_circle,
         label: 'Confirmar',
@@ -1205,6 +1234,37 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
 
     final newSlot = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
+    // RNF-03: la nueva franja no puede estar tomada por otra cita activa del
+    // mismo profesional ese día.
+    final mismas = await FirebaseFirestore.instance
+        .collection('appointments')
+        .where('dentistId', isEqualTo: apt.dentistId)
+        .where('timeSlot', isEqualTo: newSlot)
+        .get();
+    final ocupada = mismas.docs.any((d) {
+      if (d.id == apt.id) return false;
+      final m = d.data();
+      final f = m['date'];
+      if (f is! Timestamp) return false;
+      final dia = f.toDate();
+      return dia.year == date.year &&
+          dia.month == date.month &&
+          dia.day == date.day &&
+          (m['status'] == 'pending' || m['status'] == 'confirmed');
+    });
+    if (!mounted) return;
+    if (ocupada) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('La franja de las $newSlot ya está ocupada para ese profesional. Elige otra hora.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
     Navigator.pop(context);
     await prov.updateAppointment(apt.id, {
       'date': Timestamp.fromDate(DateTime(date.year, date.month, date.day, time.hour, time.minute)),
@@ -1280,6 +1340,16 @@ class _AppointmentDetailSheetState extends State<_AppointmentDetailSheet>
 
   Future<void> _sendReminder(BuildContext context) async {
     Navigator.pop(context);
+    // Aviso en la bandeja de notificaciones del paciente.
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'userId': apt.patientId,
+      'type': 'appointment',
+      'title': 'Recordatorio de cita',
+      'body': 'Tienes una cita el ${DateFormat('dd/MM/yyyy').format(apt.date)} a las ${apt.timeSlot}.',
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Recordatorio enviado al paciente'),

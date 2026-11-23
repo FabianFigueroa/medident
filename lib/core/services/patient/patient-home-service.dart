@@ -39,7 +39,7 @@ class PatientHomeService {
       };
     } catch (e) {
       debugPrint('PatientHomeService.getDashboard error: $e');
-      return {'appointments': [], 'promotions': [], 'treatments': [], 'globalPromotions': []};
+      return {'appointments': [], 'promotions': [], 'treatments': [], 'globalPromotions': <ProductModel>[]};
     }
   }
 }

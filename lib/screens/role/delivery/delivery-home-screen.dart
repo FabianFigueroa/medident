@@ -31,7 +31,7 @@ class DeliveryMainScreen extends StatelessWidget {
           GestureDetector(
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              MaterialPageRoute(builder: (_) => NotificationScreen.conProveedor(context)),
             ),
             child: Container(
               margin: const EdgeInsets.only(right: 12),

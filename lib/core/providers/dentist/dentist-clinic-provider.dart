@@ -155,7 +155,8 @@ class DentistClinicProvider with ChangeNotifier {
   }
 
   int get pendingAppointmentsCount {
-    return _appointments.where((a) => a.status != 'confirmed').length;
+    // Solo las pendientes (antes contaba canceladas y completadas).
+    return _appointments.where((a) => a.status == 'pending').length;
   }
 
   Future<void> checkClinicStatus(String userId) async {

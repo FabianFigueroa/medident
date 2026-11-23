@@ -5,6 +5,7 @@ import 'package:medident/core/models/treatment-model.dart';
 import 'package:medident/core/providers/domain/appointment-provider.dart';
 import 'package:medident/core/providers/authgate/authenticate-provider.dart';
 import 'package:medident/core/providers/dentist/dentist-clinic-provider.dart';
+import 'package:medident/core/services/clinic-service.dart';
 import 'package:medident/screens/widgets/shared/patient_search_sheet.dart';
 import 'package:medident/screens/widgets/shared/dentist_search_sheet.dart';
 
@@ -45,6 +46,8 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
     '19:00',
   ];
   final _timeCtrl = TextEditingController(text: '09:00');
+  final _treatmentTextCtrl = TextEditingController();
+  String? _formError;
   late DateTime _selectedDate;
   String _patientId = '';
   String _patientName = '';
@@ -95,21 +98,32 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
       setState(() => _treatmentsLoading = false);
       return;
     }
+    List<TreatmentModel> loaded = [];
     try {
       final cp = context.read<DentistClinicProvider>();
       if (cp.treatments.isEmpty) await cp.loadTreatments();
-      if (mounted) setState(() {
-        _treatments = cp.treatments;
+      loaded = cp.treatments;
+    } catch (_) {
+      // El paciente abre este formulario en una ruta propia, sin el
+      // DentistClinicProvider del tablero: los tratamientos se leen directo.
+    }
+    if (loaded.isEmpty) {
+      try {
+        loaded = await ClinicService().getTreatmentsByClinic(_clinicId);
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _treatments = loaded;
         _treatmentsLoading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _treatmentsLoading = false);
     }
   }
 
   @override
   void dispose() {
     _timeCtrl.dispose();
+    _treatmentTextCtrl.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -420,7 +434,7 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                           const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)))
                       : _treatments.isEmpty
                       ? TextField(
-                          controller: TextEditingController(),
+                          controller: _treatmentTextCtrl,
                           decoration: InputDecoration(
                             hintText: 'Escribe el tratamiento...',
                             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
@@ -548,6 +562,28 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
                 ),
               ),
             ]),
+            if (_formError != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(_formError!,
+                        style: const TextStyle(
+                            color: Color(0xFFB91C1C),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ]),
+              ),
+            ],
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
@@ -590,40 +626,72 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
     );
   }
 
-  Future<void> _createAppointment() async {
-    if (_patientName.isEmpty) return;
-    final treatment = _selectedTreatment;
-    if (treatment == null) return;
+  /// El error se muestra dentro del formulario: abierto como ruta propia (paciente)
+  /// o como hoja modal (clínica) no tiene un Scaffold visible para un SnackBar.
+  void _showError(String message) {
+    setState(() => _formError = message);
+  }
 
-    if (widget.isPatientMode && _dentistName.isEmpty) return;
-    if (_dentistName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona el profesional que atenderá la cita'),
-          backgroundColor: Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  Future<void> _createAppointment() async {
+    final treatmentName = _selectedTreatment?.name ??
+        _treatmentTextCtrl.text.trim();
+
+    // Antes el botón no hacía nada si faltaba un dato; ahora dice qué falta.
+    final missing = <String>[
+      if (_patientName.isEmpty) 'el paciente',
+      if (_dentistName.isEmpty)
+        widget.isPatientMode ? 'el especialista' : 'el profesional',
+      if (treatmentName.isEmpty) 'el tratamiento',
+    ];
+    if (missing.isNotEmpty) {
+      final list = missing.length == 1
+          ? missing.first
+          : '${missing.sublist(0, missing.length - 1).join(', ')} y ${missing.last}';
+      _showError('Para agendar la cita falta elegir $list.');
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _formError = null;
+    });
     final pid = _patientId.isNotEmpty
         ? _patientId
         : 'walkin_${DateTime.now().millisecondsSinceEpoch}';
 
     try {
-      await context.read<AppointmentProvider>().bookAppointment(
-        clinicId: _clinicId,
-        patientId: pid,
-        patientName: _patientName,
-        patientPhoto: _patientPhoto,
-        dentistId: _dentistId,
-        dentistName: _dentistName,
-        treatmentName: treatment.name,
-        date: _selectedDate,
-        timeSlot: _timeCtrl.text.trim(),
-      );
+      AppointmentProvider? provider;
+      try {
+        provider = context.read<AppointmentProvider>();
+      } catch (_) {
+        provider = null;
+      }
+      if (provider != null) {
+        await provider.bookAppointment(
+          clinicId: _clinicId,
+          patientId: pid,
+          patientName: _patientName,
+          patientPhoto: _patientPhoto,
+          dentistId: _dentistId,
+          dentistName: _dentistName,
+          treatmentName: treatmentName,
+          date: _selectedDate,
+          timeSlot: _timeCtrl.text.trim(),
+        );
+      } else {
+        // Ruta del paciente: no hay AppointmentProvider en el árbol.
+        await ClinicService().bookAppointment(
+          clinicId: _clinicId,
+          patientId: pid,
+          patientName: _patientName,
+          patientPhoto: _patientPhoto,
+          dentistId: _dentistId,
+          dentistName: _dentistName,
+          treatmentName: treatmentName,
+          date: _selectedDate,
+          timeSlot: _timeCtrl.text.trim(),
+        );
+      }
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -639,20 +707,15 @@ class _CreateAppointment_WidgetState extends State<CreateAppointment_Widget>
         );
         widget.onCreated?.call();
       }
+    } on SlotTakenException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        _showError(e.message);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: const Color(0xFFDC2626),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          ),
-        );
+        _showError('No se pudo agendar la cita: $e');
       }
     }
   }

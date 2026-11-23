@@ -1,83 +1,196 @@
 rules_version = '2';
+
+// Reglas de Cloud Firestore para MEDIDENT.
+// Estrictas por rol en el dominio de agendamiento y turnos laborales
+// (citas, franjas, turnos, solicitudes, avisos, clínicas y su equipo).
+// Las colecciones de los módulos fuera del alcance del proyecto de aula
+// (tienda, red social, domicilios, seguridad RFID) quedan, como mínimo,
+// restringidas a usuarios autenticados mediante la regla comodín del final.
+// Se prueban con Firebase Emulator Suite (tool/pruebas/probar_reglas.py).
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Funciones de apoyo ─────────────────────────────
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userDoc(id) { return get(/databases/$(database)/documents/users/$(id)).data; }
+    function me() { return userDoc(uid()); }
+    function isAdmin() { return signedIn() && me().role == 'admin'; }
+    function clinicDoc(cid) { return get(/databases/$(database)/documents/clinics/$(cid)).data; }
+    function clinicExists(cid) {
+      return cid is string && cid != '' && exists(/databases/$(database)/documents/clinics/$(cid));
+    }
+    function ownsClinic(cid) { return clinicExists(cid) && clinicDoc(cid).ownerId == uid(); }
+    function employeeDoc(cid) {
+      return get(/databases/$(database)/documents/clinics/$(cid)/employees/$(uid())).data;
+    }
+    // Dueño de la clínica o empleado con permiso de gestionar la agenda.
+    function managesClinic(cid) {
+      return ownsClinic(cid) ||
+        (clinicExists(cid) &&
+         exists(/databases/$(database)/documents/clinics/$(cid)/employees/$(uid())) &&
+         employeeDoc(cid).get('canManageAgenda', false) == true);
+    }
+    function changes(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
     // ── USUARIOS ───────────────────────────────────────
+    // Lectura para cualquier usuario autenticado: la app lista especialistas,
+    // pacientes de la clínica y empleados para asignar turnos.
     match /users/{userId} {
-      allow read: if request.auth != null &&
-        (request.auth.uid == userId ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        (userId == uid() ||
+         ownsClinic(request.resource.data.get('clinicId', '')) ||
+         isAdmin());
+      // El propio usuario no puede cambiar su rol; el dueño de la clínica solo
+      // toca la vinculación de sus empleados; los contadores de seguidores los
+      // mueve la función social de la app.
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (userId == uid() && request.resource.data.get('role', '') == resource.data.get('role', '')) ||
+        (changes(['clinicId', 'isClinicOwner', 'updatedAt']) &&
+          (ownsClinic(request.resource.data.get('clinicId', '')) ||
+           ownsClinic(resource.data.get('clinicId', '')))) ||
+        changes(['followersCount', 'followingCount']));
+      allow delete: if isAdmin();
     }
 
-    // ── SEGURIDAD ──────────────────────────────────────
-    match /security/{userId} {
-      allow read, write: if request.auth != null &&
-        (request.auth.uid == userId ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
-
-    // ── CLINICAS ───────────────────────────────────────
+    // ── CLÍNICAS ───────────────────────────────────────
     match /clinics/{clinicId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        (resource.data.ownerId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+      allow update: if signedIn() && (
+        resource.data.ownerId == uid() || isAdmin() ||
+        // Un empleado entra o sale de la lista al aceptar o dejar la clínica.
+        changes(['employeeIds', 'updatedAt']));
+      allow delete: if signedIn() && (resource.data.ownerId == uid() || isAdmin());
 
-    // ── REGISTROS DE ACCESO (RFID + foto) ─────────────
-    match /access_logs/{logId} {
-      allow read: if request.auth != null &&
-        (resource.data.employeeId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'dentist']);
-      allow create: if request.auth != null;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Equipo de la clínica.
+      match /employees/{employeeId} {
+        allow read: if signedIn();
+        allow write: if signedIn() && (ownsClinic(clinicId) || employeeId == uid());
+      }
     }
 
     // ── CITAS ──────────────────────────────────────────
+    // Lectura para autenticados: antes de reservar, la app consulta las citas
+    // activas del profesional en esa franja (control de doble reserva, RNF-03).
     match /appointments/{appointmentId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.status == 'pending' &&
+        (request.resource.data.patientId == uid() ||
+         request.resource.data.dentistId == uid() ||
+         managesClinic(request.resource.data.get('clinicId', '')));
+      allow update: if signedIn() &&
+        (resource.data.patientId == uid() ||
+         resource.data.dentistId == uid() ||
+         managesClinic(resource.data.get('clinicId', '')));
+      allow delete: if signedIn() &&
+        (resource.data.dentistId == uid() || managesClinic(resource.data.get('clinicId', '')));
     }
 
-    // ── POSTS ─────────────────────────────────────────
-    match /posts/{postId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // Documento de bloqueo de franja: solo se crea o reemplaza apuntando a una
+    // cita del mismo profesional (la cita se escribe en la misma transacción).
+    match /appointment_slots/{slotId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() &&
+        getAfter(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId))
+          .data.dentistId == request.resource.data.dentistId;
+      allow delete: if signedIn() &&
+        (resource.data.dentistId == uid() || managesClinic(resource.data.get('clinicId', '')));
     }
 
-    // ── STORIES ───────────────────────────────────────
-    match /stories/{storyId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // Estado del día de la agenda.
+    match /day_statuses/{statusId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() &&
+        (request.resource.data.get('dentistId', '') == uid() ||
+         managesClinic(request.resource.data.get('clinicId', '')));
+      allow delete: if signedIn() &&
+        (resource.data.get('dentistId', '') == uid() ||
+         managesClinic(resource.data.get('clinicId', '')));
     }
 
-    // ── PROMOCIONES ───────────────────────────────────
-    match /promotions/{promoId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // ── TURNOS LABORALES ───────────────────────────────
+    match /turnos/{turnoId} {
+      allow read: if signedIn() &&
+        (resource.data.employeeId == uid() ||
+         resource.data.get('dentistId', '') == uid() ||
+         managesClinic(resource.data.get('clinicId', '')) ||
+         me().get('clinicId', '') == resource.data.get('clinicId', 'sin-clinica'));
+      allow create: if signedIn() &&
+        (managesClinic(request.resource.data.get('clinicId', '')) ||
+         request.resource.data.get('dentistId', '') == uid());
+      // El empleado solo registra su asistencia y las marcas de recordatorio.
+      allow update: if signedIn() && (
+        managesClinic(resource.data.get('clinicId', '')) ||
+        resource.data.get('dentistId', '') == uid() ||
+        (resource.data.employeeId == uid() &&
+         changes(['attendanceStatus', 'attendanceAt', 'attendanceNote',
+                  'reminderWeekSent', 'reminderDaySent', 'updatedAt'])));
+      allow delete: if signedIn() &&
+        (managesClinic(resource.data.get('clinicId', '')) ||
+         resource.data.get('dentistId', '') == uid());
     }
 
-    // ── PRODUCTOS ─────────────────────────────────────
-    match /products/{productId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // Solicitudes del empleado (novedad, cambio de horario, cambio o intercambio).
+    match /turno_requests/{requestId} {
+      allow read: if signedIn() &&
+        (resource.data.employeeId == uid() ||
+         resource.data.get('targetEmployeeId', '') == uid() ||
+         managesClinic(resource.data.get('clinicId', '')) ||
+         isAdmin());
+      allow create: if signedIn() &&
+        request.resource.data.employeeId == uid() &&
+        request.resource.data.status == 'pending';
+      // Solo la clínica resuelve la solicitud.
+      allow update: if signedIn() &&
+        (managesClinic(resource.data.get('clinicId', '')) || isAdmin());
+      allow delete: if signedIn() &&
+        (resource.data.employeeId == uid() || managesClinic(resource.data.get('clinicId', '')));
+    }
+
+    // ── AVISOS ─────────────────────────────────────────
+    // Cualquier usuario autenticado puede dejar un aviso a otro (la clínica al
+    // empleado y viceversa); solo el destinatario lo lee, marca o borra.
+    match /notifications/{notificationId} {
+      allow read, update, delete: if signedIn() && resource.data.userId == uid();
+      allow create: if signedIn() && request.resource.data.userId is string;
     }
 
     // ── TRATAMIENTOS ──────────────────────────────────
     match /treatments/{treatmentId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        (managesClinic(request.resource.data.get('clinicId', '')) || isAdmin() ||
+         me().role in ['dentist', 'doctor']);
+      allow update, delete: if signedIn() &&
+        (managesClinic(resource.data.get('clinicId', '')) || isAdmin() ||
+         resource.data.get('createdBy', '') == uid());
+    }
+
+    // ── SEGURIDAD ──────────────────────────────────────
+    match /security/{userId} {
+      allow read, write: if signedIn() && (uid() == userId || isAdmin());
     }
 
     // ── ALERTAS ───────────────────────────────────────
     match /alerts/{alertId} {
-      allow read, write: if request.auth != null &&
-        (resource.data.userId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      allow create: if request.auth != null &&
-        request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if signedIn() &&
+        (resource.data.userId == uid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == uid();
+    }
+
+    // ── RESTO DE MÓDULOS (fuera del alcance del proyecto) ──
+    // Regla comodín solo para usuarios autenticados. Excluye las colecciones
+    // anteriores para que sus reglas estrictas no queden anuladas.
+    match /{coleccion}/{documento=**} {
+      allow read, write: if signedIn() && !(coleccion in [
+        'users', 'clinics', 'appointments', 'appointment_slots', 'day_statuses',
+        'turnos', 'turno_requests', 'notifications', 'treatments', 'security', 'alerts']);
     }
   }
 }

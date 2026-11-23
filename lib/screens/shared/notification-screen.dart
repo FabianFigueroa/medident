@@ -5,6 +5,16 @@ import 'package:medident/main_export.dart';
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
 
+  /// Las rutas nuevas se montan en el Navigator raíz, por encima del
+  /// MultiProvider de cada rol; por eso se reenvía el NotificationProvider.
+  static Widget conProveedor(BuildContext context) {
+    final provider = context.read<NotificationProvider>();
+    return ChangeNotifierProvider<NotificationProvider>.value(
+      value: provider,
+      child: const NotificationScreen(),
+    );
+  }
+
   @override
   State<NotificationScreen> createState() => _NotificationScreenState();
 }

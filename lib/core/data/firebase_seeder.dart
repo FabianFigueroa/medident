@@ -5,6 +5,9 @@ class FirebaseSeeder {
   static bool _executed = false;
   static const String _doneKey = 'medident_demo_seed_v2';
 
+  /// Bandera de compilación: --dart-define=SEED_DEMO_DATA=true.
+  static const bool habilitado = bool.fromEnvironment('SEED_DEMO_DATA');
+
   static Future<void> seedOnce() async {
     if (_executed) return;
     _executed = true;
